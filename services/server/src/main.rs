@@ -1,5 +1,5 @@
-use server::api::create_router;
 use clap::Parser;
+use server::api::create_router;
 use server::db::{connect_sqlite, run_migrations};
 use tokio::net::TcpListener;
 

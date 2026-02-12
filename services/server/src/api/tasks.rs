@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::process::Stdio;
 
 use axum::{
     Json,
@@ -6,8 +7,16 @@ use axum::{
     http::StatusCode,
 };
 use nanoid::nanoid;
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, DatabaseConnection, DbErr};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait,
+    IntoActiveModel, QueryFilter, QueryOrder,
+};
 use serde::{Deserialize, Serialize};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process::Command,
+    sync::broadcast,
+};
 use utoipa::ToSchema;
 
 use crate::{
@@ -101,6 +110,14 @@ pub enum StartTaskResponse {
     Error(ErrorResponse),
 }
 
+#[derive(Debug, Clone)]
+pub struct TaskRunFinishedEvent {
+    pub run_id: String,
+    pub task: String,
+    pub cwd: String,
+    pub status: TaskRunStatus,
+}
+
 #[utoipa::path(
     post,
     path = "/api/tasks/run",
@@ -148,7 +165,15 @@ pub async fn run_task(
         }
     };
 
-    let task_run = match create_task_run(&state.db, payload.task.clone(), task, payload.cwd.clone(), None).await {
+    let task_run = match create_task_run(
+        &state,
+        payload.task.clone(),
+        task,
+        payload.cwd.clone(),
+        None,
+    )
+    .await
+    {
         Ok(inserted) => inserted,
         Err(_) => {
             return (
@@ -168,7 +193,44 @@ pub async fn run_task(
     )
 }
 
-async fn create_task_run(db: &DatabaseConnection, task_key: String, task: Task, cwd: String, parent_run_id: Option<String>) -> Result<task_run::Model, DbErr> {
+pub fn spawn_task_completion_listener(state: AppState) {
+    let mut events = state.task_events.subscribe();
+
+    tokio::spawn(async move {
+        loop {
+            match events.recv().await {
+                Ok(event) => {
+                    if event.status != TaskRunStatus::Success {
+                        continue;
+                    }
+
+                    if let Err(err) = trigger_waiting_task_runs(&state, &event).await {
+                        eprintln!(
+                            "Failed to trigger waiting task runs for {}: {}",
+                            event.task, err
+                        );
+                    }
+
+                    if let Err(err) = trigger_subtasks(&state, &event).await {
+                        eprintln!("Failed to trigger subtasks for {}: {}", event.task, err);
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+}
+
+async fn create_task_run(
+    state: &AppState,
+    task_key: String,
+    task: Task,
+    cwd: String,
+    parent_run_id: Option<String>,
+) -> Result<task_run::Model, DbErr> {
+    let waiting_on = next_unmet_dependency(&state.db, &cwd, &task).await?;
+
     let model = task_run::ActiveModel {
         id: Set(nanoid!()),
         task: Set(task_key),
@@ -176,14 +238,259 @@ async fn create_task_run(db: &DatabaseConnection, task_key: String, task: Task, 
         parent_run_id: Set(parent_run_id),
         status: Set(TaskRunStatus::Queued),
         updated_at: Set(chrono::Utc::now().timestamp_millis()),
-        waiting_on: Set(None)
+        waiting_on: Set(waiting_on),
     };
 
-    let task_run = model.insert(db).await?;
+    let task_run = model.insert(&state.db).await?;
 
-    tokio::spawn(async move {
-        
-    });
-    
+    if task_run.waiting_on.is_none() {
+        start_task_run_execution(
+            state.clone(),
+            task_run.id.clone(),
+            task_run.task.clone(),
+            task_run.cwd.clone(),
+            task.command.clone(),
+        );
+    }
+
     Ok(task_run)
+}
+
+fn start_task_run_execution(
+    state: AppState,
+    run_id: String,
+    task_key: String,
+    cwd: String,
+    command: Option<String>,
+) {
+    tokio::spawn(async move {
+        if let Err(err) =
+            update_task_run_status(&state.db, &run_id, TaskRunStatus::Running, None).await
+        {
+            eprintln!("Failed to set task run {} to running: {}", run_id, err);
+            return;
+        }
+
+        let final_status = run_command(&cwd, &task_key, command).await;
+        if let Err(err) = update_task_run_status(&state.db, &run_id, final_status, None).await {
+            eprintln!("Failed to set task run {} to final status: {}", run_id, err);
+            return;
+        }
+
+        let _ = state.task_events.send(TaskRunFinishedEvent {
+            run_id,
+            task: task_key,
+            cwd,
+            status: final_status,
+        });
+    });
+}
+
+async fn run_command(cwd: &str, task_key: &str, command: Option<String>) -> TaskRunStatus {
+    let Some(command) = command else {
+        return TaskRunStatus::Success;
+    };
+
+    if command.trim().is_empty() {
+        return TaskRunStatus::Success;
+    }
+
+    match Command::new("sh")
+        .arg("-lc")
+        .arg(command)
+        .current_dir(cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(mut child) => {
+            let mut stream_tasks = Vec::new();
+
+            if let Some(stdout) = child.stdout.take() {
+                let task_key = task_key.to_string();
+                stream_tasks.push(tokio::spawn(async move {
+                    stream_task_logs(task_key, stdout, false).await;
+                }));
+            }
+
+            if let Some(stderr) = child.stderr.take() {
+                let task_key = task_key.to_string();
+                stream_tasks.push(tokio::spawn(async move {
+                    stream_task_logs(task_key, stderr, true).await;
+                }));
+            }
+
+            let status = child.wait().await;
+
+            for stream_task in stream_tasks {
+                let _ = stream_task.await;
+            }
+
+            match status {
+                Ok(status) if status.success() => TaskRunStatus::Success,
+                Ok(_) => TaskRunStatus::Failed,
+                Err(_) => TaskRunStatus::Failed,
+            }
+        }
+        Err(_) => TaskRunStatus::Failed,
+    }
+}
+
+async fn stream_task_logs<R>(task_key: String, stream: R, is_stderr: bool)
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut lines = BufReader::new(stream).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        if is_stderr {
+            eprintln!("[{}] {}", task_key, line);
+        } else {
+            println!("[{}] {}", task_key, line);
+        }
+    }
+}
+
+async fn update_task_run_status(
+    db: &DatabaseConnection,
+    run_id: &str,
+    status: TaskRunStatus,
+    waiting_on: Option<String>,
+) -> Result<(), DbErr> {
+    let Some(task_run) = task_run::Entity::find_by_id(run_id.to_string())
+        .one(db)
+        .await?
+    else {
+        return Ok(());
+    };
+    let mut active = task_run.into_active_model();
+    active.status = Set(status);
+    active.waiting_on = Set(waiting_on);
+    active.updated_at = Set(chrono::Utc::now().timestamp_millis());
+    active.update(db).await?;
+    Ok(())
+}
+
+async fn trigger_subtasks(state: &AppState, event: &TaskRunFinishedEvent) -> Result<(), DbErr> {
+    let config = match Config::load(&event.cwd).await {
+        Ok(config) => config,
+        Err(err) => {
+            eprintln!("Failed to load config for subtasks: {}", err);
+            return Ok(());
+        }
+    };
+
+    let Some(parent_task) = config.get_task(event.task.clone()) else {
+        return Ok(());
+    };
+
+    let Some(subtasks) = parent_task.tasks else {
+        return Ok(());
+    };
+
+    for (subtask_key, _) in subtasks {
+        let full_subtask_key = format!("{}:{}", event.task, subtask_key);
+        let Some(subtask) = config.get_task(full_subtask_key.clone()) else {
+            continue;
+        };
+
+        create_task_run(
+            state,
+            full_subtask_key,
+            subtask,
+            event.cwd.clone(),
+            Some(event.run_id.clone()),
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+async fn next_unmet_dependency(
+    db: &DatabaseConnection,
+    cwd: &str,
+    task: &Task,
+) -> Result<Option<String>, DbErr> {
+    let Some(depends_on) = &task.depends_on else {
+        return Ok(None);
+    };
+
+    for dependency in depends_on {
+        if !is_dependency_satisfied(db, cwd, dependency).await? {
+            return Ok(Some(dependency.clone()));
+        }
+    }
+
+    Ok(None)
+}
+
+async fn is_dependency_satisfied(
+    db: &DatabaseConnection,
+    cwd: &str,
+    dependency_task: &str,
+) -> Result<bool, DbErr> {
+    let latest = task_run::Entity::find()
+        .filter(task_run::Column::Cwd.eq(cwd.to_string()))
+        .filter(task_run::Column::Task.eq(dependency_task.to_string()))
+        .order_by_desc(task_run::Column::UpdatedAt)
+        .one(db)
+        .await?;
+
+    Ok(matches!(
+        latest.map(|run| run.status),
+        Some(TaskRunStatus::Success)
+    ))
+}
+
+async fn trigger_waiting_task_runs(
+    state: &AppState,
+    event: &TaskRunFinishedEvent,
+) -> Result<(), DbErr> {
+    let waiting_runs = task_run::Entity::find()
+        .filter(task_run::Column::Cwd.eq(event.cwd.clone()))
+        .filter(task_run::Column::Status.eq(TaskRunStatus::Queued))
+        .filter(task_run::Column::WaitingOn.eq(Some(event.task.clone())))
+        .all(&state.db)
+        .await?;
+
+    if waiting_runs.is_empty() {
+        return Ok(());
+    }
+
+    let config = match Config::load(&event.cwd).await {
+        Ok(config) => config,
+        Err(err) => {
+            eprintln!("Failed to load config for waiting task runs: {}", err);
+            return Ok(());
+        }
+    };
+
+    for waiting_run in waiting_runs {
+        let Some(task) = config.get_task(waiting_run.task.clone()) else {
+            continue;
+        };
+
+        let next_waiting_on = next_unmet_dependency(&state.db, &waiting_run.cwd, &task).await?;
+        if let Some(next_waiting_on) = next_waiting_on {
+            update_task_run_status(
+                &state.db,
+                &waiting_run.id,
+                TaskRunStatus::Queued,
+                Some(next_waiting_on),
+            )
+            .await?;
+            continue;
+        }
+
+        update_task_run_status(&state.db, &waiting_run.id, TaskRunStatus::Queued, None).await?;
+        start_task_run_execution(
+            state.clone(),
+            waiting_run.id.clone(),
+            waiting_run.task.clone(),
+            waiting_run.cwd.clone(),
+            task.command.clone(),
+        );
+    }
+
+    Ok(())
 }
