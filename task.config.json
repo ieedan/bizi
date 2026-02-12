@@ -1,12 +1,25 @@
 {
     "$schema": "./schemas/task.config.json",
     "tasks": {
+        "dev": {
+            "tasks": {
+                "packages": {
+                    "command": "pnpm -r --filter ./packages/* dev"
+                },
+                "server": {
+                    "command": "cargo run -- --port 3000"
+                }
+            }
+        },
         "format": {
-            "command": "go fmt ."
+            "command": "pnpm format"
         },
         "lint": {
-            "command": "go lint .",
+            "command": "pnpm lint",
             "dependsOn": ["format"]
+        },
+        "check": {
+            "command": "pnpm check"
         }
     }
 }

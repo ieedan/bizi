@@ -10,6 +10,10 @@
                     "type": "string",
                     "description": "The title of the task"
                 },
+                "cwd": {
+                    "type": "string",
+                    "description": "The current working directory to run the task in"
+                },
                 "command": {
                     "type": "string",
                     "description": "The command that the task will run"
@@ -36,7 +40,7 @@
                     }
                 }
             },
-            "required": ["command"]
+            "required": []
         }
     },
     "type": "object",
