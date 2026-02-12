@@ -20,6 +20,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restart_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/run": {
         parameters: {
             query?: never;
@@ -40,6 +72,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CancelTaskRequest: {
+            runId: string;
+        };
+        CancelTaskResponse: components["schemas"]["CancelTaskResponseBody"] | components["schemas"]["ErrorResponse"];
+        CancelTaskResponseBody: {
+            cancelledRunIds: string[];
+        };
         ErrorResponse: {
             message: string;
         };
@@ -47,26 +86,25 @@ export interface components {
             /** @example /Users/johndoe/documents/github/example-project */
             cwd: string;
         };
-        ListTasksResponse: {
-            Success: components["schemas"]["ListTasksResponseBody"];
-        } | {
-            Error: components["schemas"]["ErrorResponse"];
-        };
+        ListTasksResponse: components["schemas"]["ListTasksResponseBody"] | components["schemas"]["ErrorResponse"];
         ListTasksResponseBody: {
             /** @description The list of tasks that are defined in the task.config.json file */
             tasks: {
                 [key: string]: components["schemas"]["Task"];
             };
         };
+        RestartTaskRequest: {
+            runId: string;
+        };
+        RestartTaskResponse: components["schemas"]["RestartTaskResponseBody"] | components["schemas"]["ErrorResponse"];
+        RestartTaskResponseBody: {
+            runId: string;
+        };
         StartTaskRequest: {
             cwd: string;
             task: string;
         };
-        StartTaskResponse: {
-            Success: components["schemas"]["StartTaskResponseBody"];
-        } | {
-            Error: components["schemas"]["ErrorResponse"];
-        };
+        StartTaskResponse: components["schemas"]["StartTaskResponseBody"] | components["schemas"]["ErrorResponse"];
         StartTaskResponseBody: {
             runId: string;
         };
@@ -115,6 +153,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListTasksResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelTaskResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restart_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestartTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestartTaskResponse"];
                 };
             };
             /** @description Not Found */

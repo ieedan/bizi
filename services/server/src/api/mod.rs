@@ -8,9 +8,10 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api::error::ErrorResponse;
 use crate::api::tasks::{
-    CancelTaskRequest, CancelTaskResponse, ListTasksRequest, ListTasksResponse,
-    ListTasksResponseBody, StartTaskRequest, StartTaskResponse, StartTaskResponseBody, cancel_task,
-    list_tasks, run_task,
+    CancelTaskRequest, CancelTaskResponse, CancelTaskResponseBody, ListTasksRequest,
+    ListTasksResponse, ListTasksResponseBody, RestartTaskRequest, RestartTaskResponse,
+    RestartTaskResponseBody, StartTaskRequest, StartTaskResponse, StartTaskResponseBody,
+    cancel_task, list_tasks, restart_task, run_task,
 };
 use crate::config::Task;
 
@@ -40,13 +41,19 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/tasks", get(list_tasks))
         .route("/api/tasks/run", post(run_task))
         .route("/api/tasks/cancel", post(cancel_task))
+        .route("/api/tasks/restart", post(restart_task))
         .merge(SwaggerUi::new("/swagger-ui").url("/openapi.json", ApiDoc::openapi()))
         .with_state(state)
 }
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(tasks::list_tasks, tasks::run_task, tasks::cancel_task),
+    paths(
+        tasks::list_tasks,
+        tasks::run_task,
+        tasks::cancel_task,
+        tasks::restart_task
+    ),
     components(schemas(
         ListTasksRequest,
         ListTasksResponse,
@@ -58,6 +65,10 @@ pub fn create_router(state: AppState) -> Router {
         StartTaskResponseBody,
         CancelTaskRequest,
         CancelTaskResponse,
+        CancelTaskResponseBody,
+        RestartTaskRequest,
+        RestartTaskResponse,
+        RestartTaskResponseBody,
     ))
 )]
 pub struct ApiDoc;
