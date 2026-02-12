@@ -1347,16 +1347,10 @@ where
             &state,
             run_id.clone(),
             task_key.clone(),
-            line.clone(),
+            line,
             is_stderr,
         )
         .await;
-
-        if is_stderr {
-            eprintln!("[{}] {}", task_key, line);
-        } else {
-            println!("[{}] {}", task_key, line);
-        }
     }
 }
 
