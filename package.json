@@ -1,10 +1,15 @@
 {
   "name": "task-runner",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.28.2",
   "scripts": {
-    "generate": "node scripts/generate.mjs",
+    "generate": "tsx scripts/generate.ts",
     "generate:clients": "pnpm -r --filter './packages/client-*' run generate",
     "dev": "cargo run --package server"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2"
   }
 }

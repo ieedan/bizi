@@ -1,6 +1,4 @@
-#!/usr/bin/env node
-
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -9,7 +7,7 @@ const OPENAPI_URL = 'http://127.0.0.1:7436/openapi.json';
 const MAX_ATTEMPTS = 30;
 const POLL_MS = 500;
 
-async function waitForOpenApi() {
+async function waitForOpenApi(): Promise<void> {
   for (let i = 0; i < MAX_ATTEMPTS; i++) {
     try {
       const res = await fetch(OPENAPI_URL);
@@ -19,32 +17,38 @@ async function waitForOpenApi() {
     }
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
-  throw new Error(`Timeout: server did not serve ${OPENAPI_URL} within ${(MAX_ATTEMPTS * POLL_MS) / 1000}s`);
+  throw new Error(
+    `Timeout: server did not serve ${OPENAPI_URL} within ${(MAX_ATTEMPTS * POLL_MS) / 1000}s`,
+  );
 }
 
-async function run(cmd, args, opts = {}) {
+function run(cmd: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       stdio: 'inherit',
       cwd: rootDir,
       shell: true,
-      ...opts,
     });
-    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Command failed with code ${code}`))));
-    child.on('error', reject);
+    const emitter = child as unknown as NodeJS.EventEmitter;
+    emitter.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`Command failed with code ${code}`)),
+    );
+    emitter.on('error', reject);
   });
 }
 
-async function main() {
-  const serverProcess = spawn('cargo', ['run', '-p', 'server'], {
+async function main(): Promise<void> {
+  const serverProcess: ChildProcess = spawn('cargo', ['run', '-p', 'server'], {
     stdio: 'pipe',
     cwd: rootDir,
   });
 
-  const cleanup = () => {
+  const cleanup = (): void => {
     try {
       serverProcess.kill('SIGTERM');
-    } catch {}
+    } catch {
+      // Process may already be gone
+    }
   };
 
   process.on('SIGINT', cleanup);
