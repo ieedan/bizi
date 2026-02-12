@@ -38,7 +38,7 @@ impl ConfigError {
 }
 
 impl Config {
-    pub async fn load(path: String) -> Result<Self, ConfigError> {
+    pub async fn load(path: &str) -> Result<Self, ConfigError> {
         let path = Path::new(&path);
         let config = tokio::fs::read_to_string(path.join("task.config.json")).await?;
 

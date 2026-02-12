@@ -1,4 +1,4 @@
-use sea_orm::entity::prelude::*;
+use sea_orm::{entity::prelude::*};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -11,6 +11,8 @@ pub enum TaskRunStatus {
     Running,
     #[sea_orm(string_value = "success")]
     Success,
+    #[sea_orm(string_value = "cancelled")]
+    Cancelled,
     #[sea_orm(string_value = "failed")]
     Failed,
 }
@@ -22,9 +24,11 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
     pub task: String,
+    pub cwd: String,
     pub parent_run_id: Option<String>,
     pub status: TaskRunStatus,
     pub updated_at: i64,
+    pub waiting_on: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
