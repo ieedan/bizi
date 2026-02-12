@@ -548,12 +548,14 @@ fn start_task_run_execution(
     command: Option<String>,
 ) {
     tokio::spawn(async move {
-        if let Err(err) =
-            update_task_run_status(&state.db, &run_id, TaskRunStatus::Running, None).await
-        {
-            eprintln!("Failed to set task run {} to running: {}", run_id, err);
-            return;
-        }
+        let running_updated_at = match mark_task_run_running(&state.db, &run_id).await {
+            Ok(Some(updated_at)) => updated_at,
+            Ok(None) => return,
+            Err(err) => {
+                eprintln!("Failed to set task run {} to running: {}", run_id, err);
+                return;
+            }
+        };
 
         let final_status = run_command(
             state.running_processes.clone(),
@@ -564,11 +566,11 @@ fn start_task_run_execution(
         )
         .await;
 
-        let existing_status = match task_run::Entity::find_by_id(run_id.clone())
+        let existing_run = match task_run::Entity::find_by_id(run_id.clone())
             .one(&state.db)
             .await
         {
-            Ok(Some(task_run)) => task_run.status,
+            Ok(Some(task_run)) => task_run,
             Ok(None) => return,
             Err(err) => {
                 eprintln!(
@@ -579,7 +581,7 @@ fn start_task_run_execution(
             }
         };
 
-        if existing_status == TaskRunStatus::Cancelled {
+        if existing_run.status == TaskRunStatus::Cancelled {
             let _ = state.task_events.send(TaskRunFinishedEvent {
                 run_id,
                 task: task_key,
@@ -589,14 +591,16 @@ fn start_task_run_execution(
             return;
         }
 
-        if existing_status != TaskRunStatus::Running {
-            // The run was reset/restarted while this process was finishing.
-            // Ignore stale completion to avoid clobbering the new lifecycle.
+        if existing_run.status != TaskRunStatus::Running
+            || existing_run.updated_at != running_updated_at
+        {
+            // A newer execution already changed this run state.
+            // Ignore stale completion from a previous process instance.
             return;
         }
 
         if let Err(err) = update_task_run_status(&state.db, &run_id, final_status, None).await {
-            eprintln!("Failed to set task run {} to final status: {}", run_id, err);
+            eprintln!("Failed to set task run {} to running: {}", run_id, err);
             return;
         }
 
@@ -607,6 +611,27 @@ fn start_task_run_execution(
             status: final_status,
         });
     });
+}
+
+async fn mark_task_run_running(
+    db: &DatabaseConnection,
+    run_id: &str,
+) -> Result<Option<i64>, DbErr> {
+    let Some(task_run) = task_run::Entity::find_by_id(run_id.to_string())
+        .one(db)
+        .await?
+    else {
+        return Ok(None);
+    };
+
+    let updated_at = chrono::Utc::now().timestamp_millis();
+    let mut active = task_run.into_active_model();
+    active.status = Set(TaskRunStatus::Running);
+    active.waiting_on = Set(None);
+    active.updated_at = Set(updated_at);
+    active.update(db).await?;
+
+    Ok(Some(updated_at))
 }
 
 async fn run_command(
