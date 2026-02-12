@@ -13,8 +13,8 @@ use axum::{
 use futures_util::StreamExt;
 use nanoid::nanoid;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait,
-    IntoActiveModel, QueryFilter, QueryOrder,
+    ActiveModelTrait, ActiveValue::{NotSet, Set}, ColumnTrait, DatabaseConnection, DbErr,
+    EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -27,8 +27,18 @@ use utoipa::ToSchema;
 use crate::{
     api::{AppState, error::ErrorResponse},
     config::{Config, Task},
-    db::entities::task_run::{self, TaskRunStatus},
+    db::entities::{
+        task_run::{self, TaskRunStatus},
+        task_run_log,
+    },
 };
+
+const TASK_RUN_ID_ALPHABET: [char; 63] = [
+    '_', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y',
+    'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
+    'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+];
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -169,6 +179,55 @@ pub async fn get_task_run(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/tasks/{run_id}/logs",
+    params(
+        ("run_id" = String, Path, description = "The task run id"),
+    ),
+    responses(
+        (status = 200, description = "Success", body = GetTaskRunLogsResponse),
+        (status = 404, description = "Not Found", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    )
+)]
+pub async fn get_task_run_logs(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+    ws: Option<WebSocketUpgrade>,
+) -> Response {
+    if let Some(ws) = ws {
+        return ws
+            .on_upgrade(move |socket| stream_task_run_logs(socket, state, run_id))
+            .into_response();
+    }
+
+    match load_task_run_logs(&state, &run_id).await {
+        Ok(Some(logs)) => (
+            StatusCode::OK,
+            Json(GetTaskRunLogsResponse::Success(GetTaskRunLogsResponseBody {
+                run_id,
+                logs,
+            })),
+        )
+            .into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(GetTaskRunLogsResponse::Error(ErrorResponse {
+                message: "Task run not found".to_string(),
+            })),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(GetTaskRunLogsResponse::Error(ErrorResponse {
+                message: "Failed to load task run logs".to_string(),
+            })),
+        )
+            .into_response(),
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct StartTaskRequest {
@@ -233,6 +292,39 @@ pub struct TaskRunStatusChangedEvent {
     pub task: String,
     pub cwd: String,
     pub status: TaskRunStatus,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRunLogLine {
+    pub run_id: String,
+    pub task: String,
+    pub line: String,
+    pub is_stderr: bool,
+    pub timestamp: i64,
+    pub sequence: u64,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTaskRunLogsResponseBody {
+    pub run_id: String,
+    pub logs: Vec<TaskRunLogLine>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(untagged)]
+pub enum GetTaskRunLogsResponse {
+    Success(GetTaskRunLogsResponseBody),
+    Error(ErrorResponse),
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum TaskRunLogsStreamMessage {
+    Snapshot { run_id: String, logs: Vec<TaskRunLogLine> },
+    Log { log: TaskRunLogLine },
+    Error { message: String },
 }
 
 #[utoipa::path(
@@ -620,6 +712,84 @@ async fn stream_task_run_updates(mut socket: WebSocket, state: AppState, run_id:
     }
 }
 
+async fn stream_task_run_logs(mut socket: WebSocket, state: AppState, run_id: String) {
+    // Subscribe first so we do not miss new log lines while sending snapshot.
+    let mut log_events = state.task_log_events.subscribe();
+
+    let existing_logs = match load_task_run_logs(&state, &run_id).await {
+        Ok(Some(logs)) => logs,
+        Ok(None) => {
+            let payload = TaskRunLogsStreamMessage::Error {
+                message: "Task run not found".to_string(),
+            };
+            let _ = send_ws_json(&mut socket, &payload).await;
+            let _ = socket.send(Message::Close(None)).await;
+            return;
+        }
+        Err(_) => {
+            let payload = TaskRunLogsStreamMessage::Error {
+                message: "Failed to load task run logs".to_string(),
+            };
+            let _ = send_ws_json(&mut socket, &payload).await;
+            let _ = socket.send(Message::Close(None)).await;
+            return;
+        }
+    };
+
+    let mut latest_sequence = existing_logs.last().map(|log| log.sequence).unwrap_or(0);
+    let snapshot = TaskRunLogsStreamMessage::Snapshot {
+        run_id: run_id.clone(),
+        logs: existing_logs,
+    };
+    if send_ws_json(&mut socket, &snapshot).await.is_err() {
+        return;
+    }
+
+    loop {
+        tokio::select! {
+            next_message = socket.next() => {
+                match next_message {
+                    Some(Ok(Message::Close(_))) | None => break,
+                    Some(Ok(Message::Ping(payload))) => {
+                        if socket.send(Message::Pong(payload)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(_)) => {}
+                    Some(Err(_)) => break,
+                }
+            }
+            event = log_events.recv() => match event {
+                Ok(log) => {
+                    if log.run_id != run_id || log.sequence <= latest_sequence {
+                        continue;
+                    }
+                    latest_sequence = log.sequence;
+                    let payload = TaskRunLogsStreamMessage::Log { log };
+                    if send_ws_json(&mut socket, &payload).await.is_err() {
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    let logs = match load_task_run_logs(&state, &run_id).await {
+                        Ok(Some(logs)) => logs,
+                        _ => break,
+                    };
+                    latest_sequence = logs.last().map(|log| log.sequence).unwrap_or(latest_sequence);
+                    let payload = TaskRunLogsStreamMessage::Snapshot {
+                        run_id: run_id.clone(),
+                        logs,
+                    };
+                    if send_ws_json(&mut socket, &payload).await.is_err() {
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            },
+        }
+    }
+}
+
 async fn send_task_run_snapshot(
     socket: &mut WebSocket,
     state: &AppState,
@@ -643,6 +813,35 @@ async fn send_task_run_snapshot(
     send_ws_json(socket, &payload).await
 }
 
+async fn load_task_run_logs(state: &AppState, run_id: &str) -> Result<Option<Vec<TaskRunLogLine>>, DbErr> {
+    let task_run_exists = task_run::Entity::find_by_id(run_id.to_string())
+        .one(&state.db)
+        .await?
+        .is_some();
+    if !task_run_exists {
+        return Ok(None);
+    }
+
+    let logs = task_run_log::Entity::find()
+        .filter(task_run_log::Column::RunId.eq(run_id.to_string()))
+        .order_by_asc(task_run_log::Column::Id)
+        .all(&state.db)
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|row| TaskRunLogLine {
+                    run_id: row.run_id,
+                    task: row.task,
+                    line: row.line,
+                    is_stderr: row.is_stderr,
+                    timestamp: row.timestamp,
+                    sequence: row.id as u64,
+                })
+                .collect::<Vec<_>>()
+        })?;
+    Ok(Some(logs))
+}
+
 async fn send_ws_json<T: Serialize>(socket: &mut WebSocket, payload: &T) -> Result<(), ()> {
     let message = serde_json::to_string(payload).map_err(|_| ())?;
     socket.send(Message::Text(message)).await.map_err(|_| ())
@@ -658,7 +857,7 @@ async fn create_task_run(
     let waiting_on = next_unmet_dependency(&state.db, &cwd, &task).await?;
 
     let model = task_run::ActiveModel {
-        id: Set(nanoid!()),
+        id: Set(nanoid!(21, &TASK_RUN_ID_ALPHABET)),
         task: Set(task_key),
         cwd: Set(cwd),
         parent_run_id: Set(parent_run_id),
@@ -706,6 +905,7 @@ fn start_task_run_execution(
         };
 
         let final_status = run_command(
+            state.clone(),
             state.running_processes.clone(),
             run_id.clone(),
             &cwd,
@@ -776,6 +976,7 @@ async fn mark_task_run_running(
 }
 
 async fn run_command(
+    state: AppState,
     running_processes: std::sync::Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
     run_id: String,
     cwd: &str,
@@ -813,16 +1014,20 @@ async fn run_command(
             let mut stream_tasks = Vec::new();
 
             if let Some(stdout) = child.stdout.take() {
+                let state = state.clone();
+                let run_id = run_id.clone();
                 let task_key = task_key.to_string();
                 stream_tasks.push(tokio::spawn(async move {
-                    stream_task_logs(task_key, stdout, false).await;
+                    stream_task_logs(state, run_id, task_key, stdout, false).await;
                 }));
             }
 
             if let Some(stderr) = child.stderr.take() {
+                let state = state.clone();
+                let run_id = run_id.clone();
                 let task_key = task_key.to_string();
                 stream_tasks.push(tokio::spawn(async move {
-                    stream_task_logs(task_key, stderr, true).await;
+                    stream_task_logs(state, run_id, task_key, stderr, true).await;
                 }));
             }
 
@@ -1132,16 +1337,60 @@ pub async fn cancel_all_running_processes(state: &AppState) {
     }
 }
 
-async fn stream_task_logs<R>(task_key: String, stream: R, is_stderr: bool)
+async fn stream_task_logs<R>(state: AppState, run_id: String, task_key: String, stream: R, is_stderr: bool)
 where
     R: tokio::io::AsyncRead + Unpin,
 {
     let mut lines = BufReader::new(stream).lines();
     while let Ok(Some(line)) = lines.next_line().await {
+        append_task_log_line(
+            &state,
+            run_id.clone(),
+            task_key.clone(),
+            line.clone(),
+            is_stderr,
+        )
+        .await;
+
         if is_stderr {
             eprintln!("[{}] {}", task_key, line);
         } else {
             println!("[{}] {}", task_key, line);
+        }
+    }
+}
+
+async fn append_task_log_line(
+    state: &AppState,
+    run_id: String,
+    task: String,
+    line: String,
+    is_stderr: bool,
+) {
+    let timestamp = chrono::Utc::now().timestamp_millis();
+    let log = task_run_log::ActiveModel {
+        id: NotSet,
+        run_id: Set(run_id),
+        task: Set(task),
+        line: Set(line),
+        is_stderr: Set(is_stderr),
+        timestamp: Set(timestamp),
+    };
+
+    match log.insert(&state.db).await {
+        Ok(inserted) => {
+            let log_line = TaskRunLogLine {
+                run_id: inserted.run_id,
+                task: inserted.task,
+                line: inserted.line,
+                is_stderr: inserted.is_stderr,
+                timestamp: inserted.timestamp,
+                sequence: inserted.id as u64,
+            };
+            let _ = state.task_log_events.send(log_line);
+        }
+        Err(err) => {
+            eprintln!("Failed to persist task log line: {}", err);
         }
     }
 }
