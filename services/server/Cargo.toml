@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "process", "sync", "signal"] }
 utoipa = { version = "4" }
 utoipa-swagger-ui = { version = "7", features = ["axum"] }
@@ -18,3 +18,4 @@ sea-orm-migration = { version = "1", default-features = false, features = ["sqlx
 nanoid = "0.4.0"
 chrono = "0.4.43"
 libc = "0.2"
+futures-util = "0.3"

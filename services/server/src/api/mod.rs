@@ -9,9 +9,10 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::api::error::ErrorResponse;
 use crate::api::tasks::{
     CancelTaskRequest, CancelTaskResponse, CancelTaskResponseBody, ListTasksRequest,
-    ListTasksResponse, ListTasksResponseBody, RestartTaskRequest, RestartTaskResponse,
-    RestartTaskResponseBody, StartTaskRequest, StartTaskResponse, StartTaskResponseBody,
-    cancel_task, list_tasks, restart_task, run_task,
+    GetTaskRunResponse, GetTaskRunResponseBody, ListTasksResponse, ListTasksResponseBody,
+    RestartTaskRequest, RestartTaskResponse, RestartTaskResponseBody, StartTaskRequest,
+    StartTaskResponse, StartTaskResponseBody, TaskRunTreeNode, cancel_task, get_task_run,
+    list_tasks, restart_task, run_task,
 };
 use crate::config::Task;
 
@@ -21,7 +22,7 @@ pub mod tasks;
 #[derive(Clone)]
 pub struct AppState {
     pub db: DatabaseConnection,
-    pub task_events: broadcast::Sender<tasks::TaskRunFinishedEvent>,
+    pub task_events: broadcast::Sender<tasks::TaskRunStatusChangedEvent>,
     pub running_processes: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
 }
 
@@ -39,6 +40,7 @@ pub fn create_router(state: AppState) -> Router {
 
     Router::new()
         .route("/api/tasks", get(list_tasks))
+        .route("/api/tasks/:run_id", get(get_task_run))
         .route("/api/tasks/run", post(run_task))
         .route("/api/tasks/cancel", post(cancel_task))
         .route("/api/tasks/restart", post(restart_task))
@@ -50,6 +52,7 @@ pub fn create_router(state: AppState) -> Router {
 #[openapi(
     paths(
         tasks::list_tasks,
+        tasks::get_task_run,
         tasks::run_task,
         tasks::cancel_task,
         tasks::restart_task
@@ -58,6 +61,9 @@ pub fn create_router(state: AppState) -> Router {
         ListTasksRequest,
         ListTasksResponse,
         ListTasksResponseBody,
+        GetTaskRunResponse,
+        GetTaskRunResponseBody,
+        TaskRunTreeNode,
         ErrorResponse,
         Task,
         StartTaskRequest,

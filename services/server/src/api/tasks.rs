@@ -3,9 +3,14 @@ use std::process::Stdio;
 
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{
+        Path, Query, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
     http::StatusCode,
+    response::{IntoResponse, Response},
 };
+use futures_util::StreamExt;
 use nanoid::nanoid;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait,
@@ -42,6 +47,32 @@ pub struct ListTasksResponseBody {
 #[serde(untagged)]
 pub enum ListTasksResponse {
     Success(ListTasksResponseBody),
+    Error(ErrorResponse),
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRunTreeNode {
+    pub id: String,
+    pub task: String,
+    pub cwd: String,
+    pub parent_run_id: Option<String>,
+    pub status: TaskRunStatus,
+    pub updated_at: i64,
+    pub waiting_on: Option<String>,
+    pub children: Vec<TaskRunTreeNode>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTaskRunResponseBody {
+    pub task_run: TaskRunTreeNode,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(untagged)]
+pub enum GetTaskRunResponse {
+    Success(GetTaskRunResponseBody),
     Error(ErrorResponse),
 }
 
@@ -88,6 +119,54 @@ pub async fn list_tasks(
             tasks: config.get_all_tasks(),
         })),
     )
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/tasks/{run_id}",
+    params(
+        ("run_id" = String, Path, description = "The task run id"),
+    ),
+    responses(
+        (status = 200, description = "Success", body = GetTaskRunResponse),
+        (status = 404, description = "Not Found", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    )
+)]
+pub async fn get_task_run(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+    ws: Option<WebSocketUpgrade>,
+) -> Response {
+    if let Some(ws) = ws {
+        return ws
+            .on_upgrade(move |socket| stream_task_run_updates(socket, state, run_id))
+            .into_response();
+    }
+
+    match load_task_run_tree(&state, &run_id).await {
+        Ok(Some(task_run)) => (
+            StatusCode::OK,
+            Json(GetTaskRunResponse::Success(GetTaskRunResponseBody {
+                task_run,
+            })),
+        )
+            .into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(GetTaskRunResponse::Error(ErrorResponse {
+                message: "Task run not found".to_string(),
+            })),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(GetTaskRunResponse::Error(ErrorResponse {
+                message: "Failed to load task run".to_string(),
+            })),
+        )
+            .into_response(),
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -149,7 +228,7 @@ pub enum RestartTaskResponse {
 }
 
 #[derive(Debug, Clone)]
-pub struct TaskRunFinishedEvent {
+pub struct TaskRunStatusChangedEvent {
     pub run_id: String,
     pub task: String,
     pub cwd: String,
@@ -506,6 +585,69 @@ pub fn spawn_task_completion_listener(state: AppState) {
     });
 }
 
+async fn stream_task_run_updates(mut socket: WebSocket, state: AppState, run_id: String) {
+    // Subscribe first so status transitions cannot be missed between
+    // initial snapshot and entering the receive loop.
+    let mut task_events = state.task_events.subscribe();
+
+    if send_task_run_snapshot(&mut socket, &state, &run_id).await.is_err() {
+        return;
+    }
+
+    loop {
+        tokio::select! {
+            next_message = socket.next() => {
+                match next_message {
+                    Some(Ok(Message::Close(_))) | None => break,
+                    Some(Ok(Message::Ping(payload))) => {
+                        if socket.send(Message::Pong(payload)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(_)) => {}
+                    Some(Err(_)) => break,
+                }
+            }
+            event = task_events.recv() => match event {
+                Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {
+                    if send_task_run_snapshot(&mut socket, &state, &run_id).await.is_err() {
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            },
+        }
+    }
+}
+
+async fn send_task_run_snapshot(
+    socket: &mut WebSocket,
+    state: &AppState,
+    run_id: &str,
+) -> Result<(), ()> {
+    let payload = match load_task_run_tree(state, run_id).await {
+        Ok(Some(task_run)) => GetTaskRunResponse::Success(GetTaskRunResponseBody { task_run }),
+        Ok(None) => {
+            let payload = GetTaskRunResponse::Error(ErrorResponse {
+                message: "Task run not found".to_string(),
+            });
+            let _ = send_ws_json(socket, &payload).await;
+            let _ = socket.send(Message::Close(None)).await;
+            return Err(());
+        }
+        Err(_) => GetTaskRunResponse::Error(ErrorResponse {
+            message: "Failed to load task run".to_string(),
+        }),
+    };
+
+    send_ws_json(socket, &payload).await
+}
+
+async fn send_ws_json<T: Serialize>(socket: &mut WebSocket, payload: &T) -> Result<(), ()> {
+    let message = serde_json::to_string(payload).map_err(|_| ())?;
+    socket.send(Message::Text(message)).await.map_err(|_| ())
+}
+
 async fn create_task_run(
     state: &AppState,
     task_key: String,
@@ -526,6 +668,12 @@ async fn create_task_run(
     };
 
     let task_run = model.insert(&state.db).await?;
+    let _ = state.task_events.send(TaskRunStatusChangedEvent {
+        run_id: task_run.id.clone(),
+        task: task_run.task.clone(),
+        cwd: task_run.cwd.clone(),
+        status: task_run.status,
+    });
 
     if task_run.waiting_on.is_none() {
         start_task_run_execution(
@@ -548,7 +696,7 @@ fn start_task_run_execution(
     command: Option<String>,
 ) {
     tokio::spawn(async move {
-        let running_updated_at = match mark_task_run_running(&state.db, &run_id).await {
+        let running_updated_at = match mark_task_run_running(&state, &run_id).await {
             Ok(Some(updated_at)) => updated_at,
             Ok(None) => return,
             Err(err) => {
@@ -582,12 +730,6 @@ fn start_task_run_execution(
         };
 
         if existing_run.status == TaskRunStatus::Cancelled {
-            let _ = state.task_events.send(TaskRunFinishedEvent {
-                run_id,
-                task: task_key,
-                cwd,
-                status: TaskRunStatus::Cancelled,
-            });
             return;
         }
 
@@ -599,26 +741,19 @@ fn start_task_run_execution(
             return;
         }
 
-        if let Err(err) = update_task_run_status(&state.db, &run_id, final_status, None).await {
+        if let Err(err) = update_task_run_status(&state, &run_id, final_status, None).await {
             eprintln!("Failed to set task run {} to running: {}", run_id, err);
             return;
         }
-
-        let _ = state.task_events.send(TaskRunFinishedEvent {
-            run_id,
-            task: task_key,
-            cwd,
-            status: final_status,
-        });
     });
 }
 
 async fn mark_task_run_running(
-    db: &DatabaseConnection,
+    state: &AppState,
     run_id: &str,
 ) -> Result<Option<i64>, DbErr> {
     let Some(task_run) = task_run::Entity::find_by_id(run_id.to_string())
-        .one(db)
+        .one(&state.db)
         .await?
     else {
         return Ok(None);
@@ -629,7 +764,13 @@ async fn mark_task_run_running(
     active.status = Set(TaskRunStatus::Running);
     active.waiting_on = Set(None);
     active.updated_at = Set(updated_at);
-    active.update(db).await?;
+    let updated = active.update(&state.db).await?;
+    let _ = state.task_events.send(TaskRunStatusChangedEvent {
+        run_id: updated.id,
+        task: updated.task,
+        cwd: updated.cwd,
+        status: updated.status,
+    });
 
     Ok(Some(updated_at))
 }
@@ -816,6 +957,69 @@ fn collect_descendant_run_ids(all_runs: &[task_run::Model], root_run_id: &str) -
     result
 }
 
+async fn load_task_run_tree(state: &AppState, run_id: &str) -> Result<Option<TaskRunTreeNode>, DbErr> {
+    let Some(root_run) = task_run::Entity::find_by_id(run_id.to_string())
+        .one(&state.db)
+        .await?
+    else {
+        return Ok(None);
+    };
+
+    let all_runs = task_run::Entity::find()
+        .filter(task_run::Column::Cwd.eq(root_run.cwd.clone()))
+        .all(&state.db)
+        .await?;
+    let descendant_ids = collect_descendant_run_ids(&all_runs, run_id)
+        .into_iter()
+        .collect::<HashSet<_>>();
+
+    let mut runs_by_id = HashMap::new();
+    let mut children_by_parent: HashMap<String, Vec<String>> = HashMap::new();
+
+    for run in all_runs {
+        if !descendant_ids.contains(&run.id) {
+            continue;
+        }
+        if let Some(parent_run_id) = run.parent_run_id.clone() {
+            children_by_parent
+                .entry(parent_run_id)
+                .or_default()
+                .push(run.id.clone());
+        }
+        runs_by_id.insert(run.id.clone(), run);
+    }
+
+    Ok(build_task_run_tree(run_id, &runs_by_id, &children_by_parent))
+}
+
+fn build_task_run_tree(
+    run_id: &str,
+    runs_by_id: &HashMap<String, task_run::Model>,
+    children_by_parent: &HashMap<String, Vec<String>>,
+) -> Option<TaskRunTreeNode> {
+    let run = runs_by_id.get(run_id)?;
+
+    let mut children = children_by_parent
+        .get(run_id)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|child_run_id| build_task_run_tree(&child_run_id, runs_by_id, children_by_parent))
+        .collect::<Vec<_>>();
+    children.sort_by_key(|child| child.updated_at);
+
+    Some(TaskRunTreeNode {
+        id: run.id.clone(),
+        task: run.task.clone(),
+        cwd: run.cwd.clone(),
+        parent_run_id: run.parent_run_id.clone(),
+        status: run.status,
+        updated_at: run.updated_at,
+        waiting_on: run.waiting_on.clone(),
+        children,
+    })
+}
+
 async fn cancel_task_runs(state: &AppState, run_ids: &[String]) -> Result<(), DbErr> {
     for run_id in run_ids {
         let Some(task_run) = task_run::Entity::find_by_id(run_id.clone())
@@ -836,7 +1040,7 @@ async fn cancel_task_runs(state: &AppState, run_ids: &[String]) -> Result<(), Db
             let _ = cancel_tx.send(());
         }
 
-        update_task_run_status(&state.db, run_id, TaskRunStatus::Cancelled, None).await?;
+        update_task_run_status(state, run_id, TaskRunStatus::Cancelled, None).await?;
     }
 
     Ok(())
@@ -908,7 +1112,7 @@ async fn prepare_task_runs_for_restart(
             next_unmet_dependency(&state.db, &run.cwd, &task).await?
         };
 
-        update_task_run_status(&state.db, &run.id, TaskRunStatus::Queued, waiting_on).await?;
+        update_task_run_status(state, &run.id, TaskRunStatus::Queued, waiting_on).await?;
     }
 
     Ok(())
@@ -943,13 +1147,13 @@ where
 }
 
 async fn update_task_run_status(
-    db: &DatabaseConnection,
+    state: &AppState,
     run_id: &str,
     status: TaskRunStatus,
     waiting_on: Option<String>,
 ) -> Result<(), DbErr> {
     let Some(task_run) = task_run::Entity::find_by_id(run_id.to_string())
-        .one(db)
+        .one(&state.db)
         .await?
     else {
         return Ok(());
@@ -958,11 +1162,17 @@ async fn update_task_run_status(
     active.status = Set(status);
     active.waiting_on = Set(waiting_on);
     active.updated_at = Set(chrono::Utc::now().timestamp_millis());
-    active.update(db).await?;
+    let updated = active.update(&state.db).await?;
+    let _ = state.task_events.send(TaskRunStatusChangedEvent {
+        run_id: updated.id,
+        task: updated.task,
+        cwd: updated.cwd,
+        status: updated.status,
+    });
     Ok(())
 }
 
-async fn trigger_subtasks(state: &AppState, event: &TaskRunFinishedEvent) -> Result<(), DbErr> {
+async fn trigger_subtasks(state: &AppState, event: &TaskRunStatusChangedEvent) -> Result<(), DbErr> {
     let config = match Config::load(&event.cwd).await {
         Ok(config) => config,
         Err(err) => {
@@ -1049,7 +1259,7 @@ async fn is_dependency_satisfied(
 
 async fn trigger_waiting_task_runs(
     state: &AppState,
-    event: &TaskRunFinishedEvent,
+    event: &TaskRunStatusChangedEvent,
 ) -> Result<(), DbErr> {
     let waiting_runs = task_run::Entity::find()
         .filter(task_run::Column::Cwd.eq(event.cwd.clone()))
@@ -1078,7 +1288,7 @@ async fn trigger_waiting_task_runs(
         let next_waiting_on = next_unmet_dependency(&state.db, &waiting_run.cwd, &task).await?;
         if let Some(next_waiting_on) = next_waiting_on {
             update_task_run_status(
-                &state.db,
+                state,
                 &waiting_run.id,
                 TaskRunStatus::Queued,
                 Some(next_waiting_on),
@@ -1087,7 +1297,7 @@ async fn trigger_waiting_task_runs(
             continue;
         }
 
-        update_task_run_status(&state.db, &waiting_run.id, TaskRunStatus::Queued, None).await?;
+        update_task_run_status(state, &waiting_run.id, TaskRunStatus::Queued, None).await?;
         start_task_run_execution(
             state.clone(),
             waiting_run.id.clone(),
