@@ -1,14 +1,16 @@
 use axum::routing::post;
 use axum::{Router, routing::get};
 use sea_orm::DatabaseConnection;
-use tokio::sync::broadcast;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{Mutex, broadcast, oneshot};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api::error::ErrorResponse;
 use crate::api::tasks::{
-    ListTasksRequest, ListTasksResponse, ListTasksResponseBody, StartTaskRequest,
-    StartTaskResponse, StartTaskResponseBody, list_tasks, run_task,
+    CancelTaskRequest, CancelTaskResponse, ListTasksRequest, ListTasksResponse,
+    ListTasksResponseBody, StartTaskRequest, StartTaskResponse, StartTaskResponseBody, cancel_task,
+    list_tasks, run_task,
 };
 use crate::config::Task;
 
@@ -19,23 +21,29 @@ pub mod tasks;
 pub struct AppState {
     pub db: DatabaseConnection,
     pub task_events: broadcast::Sender<tasks::TaskRunFinishedEvent>,
+    pub running_processes: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
 }
 
 pub fn create_router(db: DatabaseConnection) -> Router {
     let (task_events, _) = broadcast::channel(256);
-    let state = AppState { db, task_events };
+    let state = AppState {
+        db,
+        task_events,
+        running_processes: Arc::new(Mutex::new(HashMap::new())),
+    };
     tasks::spawn_task_completion_listener(state.clone());
 
     Router::new()
         .route("/api/tasks", get(list_tasks))
         .route("/api/tasks/run", post(run_task))
+        .route("/api/tasks/cancel", post(cancel_task))
         .merge(SwaggerUi::new("/swagger-ui").url("/openapi.json", ApiDoc::openapi()))
         .with_state(state)
 }
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(tasks::list_tasks, tasks::run_task),
+    paths(tasks::list_tasks, tasks::run_task, tasks::cancel_task),
     components(schemas(
         ListTasksRequest,
         ListTasksResponse,
@@ -45,6 +53,8 @@ pub fn create_router(db: DatabaseConnection) -> Router {
         StartTaskRequest,
         StartTaskResponse,
         StartTaskResponseBody,
+        CancelTaskRequest,
+        CancelTaskResponse,
     ))
 )]
 pub struct ApiDoc;

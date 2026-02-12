@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
-    sync::broadcast,
+    sync::{Mutex, broadcast, oneshot},
 };
 use utoipa::ToSchema;
 
@@ -110,6 +110,25 @@ pub enum StartTaskResponse {
     Error(ErrorResponse),
 }
 
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelTaskRequest {
+    pub run_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelTaskResponseBody {
+    pub cancelled_run_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(untagged)]
+pub enum CancelTaskResponse {
+    Success(CancelTaskResponseBody),
+    Error(ErrorResponse),
+}
+
 #[derive(Debug, Clone)]
 pub struct TaskRunFinishedEvent {
     pub run_id: String,
@@ -193,6 +212,78 @@ pub async fn run_task(
     )
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/tasks/cancel",
+    request_body = CancelTaskRequest,
+    responses(
+        (status = 200, description = "Success", body = CancelTaskResponse),
+        (status = 404, description = "Not Found", body = ErrorResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    )
+)]
+pub async fn cancel_task(
+    State(state): State<AppState>,
+    Json(payload): Json<CancelTaskRequest>,
+) -> (StatusCode, Json<CancelTaskResponse>) {
+    let task_run = match task_run::Entity::find_by_id(payload.run_id.clone())
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(task_run)) => task_run,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(CancelTaskResponse::Error(ErrorResponse {
+                    message: "Task run not found".to_string(),
+                })),
+            );
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CancelTaskResponse::Error(ErrorResponse {
+                    message: "Failed to load task run".to_string(),
+                })),
+            );
+        }
+    };
+
+    let all_runs = match task_run::Entity::find()
+        .filter(task_run::Column::Cwd.eq(task_run.cwd.clone()))
+        .all(&state.db)
+        .await
+    {
+        Ok(runs) => runs,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CancelTaskResponse::Error(ErrorResponse {
+                    message: "Failed to load child task runs".to_string(),
+                })),
+            );
+        }
+    };
+
+    let run_ids_to_cancel = collect_descendant_run_ids(&all_runs, &payload.run_id);
+
+    if let Err(_) = cancel_task_runs(&state, &run_ids_to_cancel).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(CancelTaskResponse::Error(ErrorResponse {
+                message: "Failed to cancel task runs".to_string(),
+            })),
+        );
+    }
+
+    (
+        StatusCode::OK,
+        Json(CancelTaskResponse::Success(CancelTaskResponseBody {
+            cancelled_run_ids: run_ids_to_cancel,
+        })),
+    )
+}
+
 pub fn spawn_task_completion_listener(state: AppState) {
     let mut events = state.task_events.subscribe();
 
@@ -271,7 +362,40 @@ fn start_task_run_execution(
             return;
         }
 
-        let final_status = run_command(&cwd, &task_key, command).await;
+        let final_status = run_command(
+            state.running_processes.clone(),
+            run_id.clone(),
+            &cwd,
+            &task_key,
+            command,
+        )
+        .await;
+
+        let existing_status = match task_run::Entity::find_by_id(run_id.clone())
+            .one(&state.db)
+            .await
+        {
+            Ok(Some(task_run)) => task_run.status,
+            Ok(None) => return,
+            Err(err) => {
+                eprintln!(
+                    "Failed to load task run {} after execution: {}",
+                    run_id, err
+                );
+                return;
+            }
+        };
+
+        if existing_status == TaskRunStatus::Cancelled {
+            let _ = state.task_events.send(TaskRunFinishedEvent {
+                run_id,
+                task: task_key,
+                cwd,
+                status: TaskRunStatus::Cancelled,
+            });
+            return;
+        }
+
         if let Err(err) = update_task_run_status(&state.db, &run_id, final_status, None).await {
             eprintln!("Failed to set task run {} to final status: {}", run_id, err);
             return;
@@ -286,7 +410,13 @@ fn start_task_run_execution(
     });
 }
 
-async fn run_command(cwd: &str, task_key: &str, command: Option<String>) -> TaskRunStatus {
+async fn run_command(
+    running_processes: std::sync::Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    run_id: String,
+    cwd: &str,
+    task_key: &str,
+    command: Option<String>,
+) -> TaskRunStatus {
     let Some(command) = command else {
         return TaskRunStatus::Success;
     };
@@ -295,15 +425,26 @@ async fn run_command(cwd: &str, task_key: &str, command: Option<String>) -> Task
         return TaskRunStatus::Success;
     }
 
-    match Command::new("sh")
+    let mut command_builder = Command::new("sh");
+    command_builder
         .arg("-lc")
         .arg(command)
         .current_dir(cwd)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
     {
+        command_builder.process_group(0);
+    }
+
+    match command_builder.spawn() {
         Ok(mut child) => {
+            let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+            running_processes
+                .lock()
+                .await
+                .insert(run_id.clone(), cancel_tx);
+
             let mut stream_tasks = Vec::new();
 
             if let Some(stdout) = child.stdout.take() {
@@ -320,7 +461,34 @@ async fn run_command(cwd: &str, task_key: &str, command: Option<String>) -> Task
                 }));
             }
 
-            let status = child.wait().await;
+            let status = tokio::select! {
+                wait_result = child.wait() => wait_result,
+                _ = cancel_rx => {
+                    #[cfg(unix)]
+                    {
+                        if let Some(pid) = child.id() {
+                            // Negative PID targets the entire process group.
+                            unsafe {
+                                libc::kill(-(pid as i32), libc::SIGKILL);
+                            }
+                        } else {
+                            let _ = child.kill().await;
+                        }
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        let _ = child.kill().await;
+                    }
+                    let _ = child.wait().await;
+                    running_processes.lock().await.remove(&run_id);
+                    for stream_task in stream_tasks {
+                        let _ = stream_task.await;
+                    }
+                    return TaskRunStatus::Cancelled;
+                }
+            };
+
+            running_processes.lock().await.remove(&run_id);
 
             for stream_task in stream_tasks {
                 let _ = stream_task.await;
@@ -334,6 +502,55 @@ async fn run_command(cwd: &str, task_key: &str, command: Option<String>) -> Task
         }
         Err(_) => TaskRunStatus::Failed,
     }
+}
+
+fn collect_descendant_run_ids(all_runs: &[task_run::Model], root_run_id: &str) -> Vec<String> {
+    let mut by_parent: HashMap<&str, Vec<&task_run::Model>> = HashMap::new();
+    for run in all_runs {
+        if let Some(parent_run_id) = run.parent_run_id.as_deref() {
+            by_parent.entry(parent_run_id).or_default().push(run);
+        }
+    }
+
+    let mut result = Vec::new();
+    let mut stack = vec![root_run_id.to_string()];
+
+    while let Some(run_id) = stack.pop() {
+        result.push(run_id.clone());
+        if let Some(children) = by_parent.get(run_id.as_str()) {
+            for child in children {
+                stack.push(child.id.clone());
+            }
+        }
+    }
+
+    result
+}
+
+async fn cancel_task_runs(state: &AppState, run_ids: &[String]) -> Result<(), DbErr> {
+    for run_id in run_ids {
+        let Some(task_run) = task_run::Entity::find_by_id(run_id.clone())
+            .one(&state.db)
+            .await?
+        else {
+            continue;
+        };
+
+        if matches!(
+            task_run.status,
+            TaskRunStatus::Success | TaskRunStatus::Failed
+        ) {
+            continue;
+        }
+
+        if let Some(cancel_tx) = state.running_processes.lock().await.remove(run_id) {
+            let _ = cancel_tx.send(());
+        }
+
+        update_task_run_status(&state.db, run_id, TaskRunStatus::Cancelled, None).await?;
+    }
+
+    Ok(())
 }
 
 async fn stream_task_logs<R>(task_key: String, stream: R, is_stderr: bool)
