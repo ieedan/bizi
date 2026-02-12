@@ -1,0 +1,12 @@
+{
+    "$schema": "./schemas/task.config.json",
+    "tasks": {
+        "format": {
+            "command": "go fmt ."
+        },
+        "lint": {
+            "command": "go lint .",
+            "dependsOn": ["format"]
+        }
+    }
+}

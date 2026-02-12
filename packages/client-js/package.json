@@ -1,0 +1,17 @@
+{
+  "name": "client-js",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "generate": "openapi-typescript http://0.0.0.0:7436/openapi.json -o ./src/api.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.28.2",
+  "devDependencies": {
+    "openapi-fetch": "^0.17.0",
+    "openapi-typescript": "^7.13.0"
+  }
+}
