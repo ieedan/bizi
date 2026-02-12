@@ -553,6 +553,20 @@ async fn cancel_task_runs(state: &AppState, run_ids: &[String]) -> Result<(), Db
     Ok(())
 }
 
+pub async fn cancel_all_running_processes(state: &AppState) {
+    let cancel_senders = {
+        let mut running = state.running_processes.lock().await;
+        running
+            .drain()
+            .map(|(_, sender)| sender)
+            .collect::<Vec<_>>()
+    };
+
+    for sender in cancel_senders {
+        let _ = sender.send(());
+    }
+}
+
 async fn stream_task_logs<R>(task_key: String, stream: R, is_stderr: bool)
 where
     R: tokio::io::AsyncRead + Unpin,

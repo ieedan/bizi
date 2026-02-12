@@ -1,5 +1,5 @@
 use clap::Parser;
-use server::api::create_router;
+use server::api::{create_app_state, create_router, tasks};
 use server::db::{connect_sqlite, run_migrations};
 use tokio::net::TcpListener;
 
@@ -19,7 +19,8 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let db = connect_sqlite(&args.database_url).await?;
     run_migrations(&db).await?;
-    let app = create_router(db);
+    let state = create_app_state(db);
+    let app = create_router(state.clone());
 
     let address = format!("{}:{}", args.address, args.port);
 
@@ -27,6 +28,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .unwrap();
     println!("Server is running on {}", address);
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            let _ = tokio::signal::ctrl_c().await;
+            tasks::cancel_all_running_processes(&state).await;
+            // Give task runners a brief moment to propagate kills.
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        })
+        .await?;
     Ok(())
 }

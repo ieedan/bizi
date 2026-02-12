@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 axum = "0.7"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "process", "sync"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "process", "sync", "signal"] }
 utoipa = { version = "4" }
 utoipa-swagger-ui = { version = "7", features = ["axum"] }
 serde = { version = "1", features = ["derive"] }

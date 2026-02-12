@@ -24,13 +24,16 @@ pub struct AppState {
     pub running_processes: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
 }
 
-pub fn create_router(db: DatabaseConnection) -> Router {
+pub fn create_app_state(db: DatabaseConnection) -> AppState {
     let (task_events, _) = broadcast::channel(256);
-    let state = AppState {
+    AppState {
         db,
         task_events,
         running_processes: Arc::new(Mutex::new(HashMap::new())),
-    };
+    }
+}
+
+pub fn create_router(state: AppState) -> Router {
     tasks::spawn_task_completion_listener(state.clone());
 
     Router::new()
