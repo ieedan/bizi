@@ -16,6 +16,7 @@ use crate::api::tasks::{
     restart_task, run_task,
 };
 use crate::config::Task;
+use crate::db::entities::task_run::TaskRunStatus;
 
 pub mod error;
 pub mod tasks;
@@ -84,6 +85,7 @@ pub fn create_router(state: AppState) -> Router {
         RestartTaskRequest,
         RestartTaskResponse,
         RestartTaskResponseBody,
+        TaskRunStatus,
     ))
 )]
 pub struct ApiDoc;

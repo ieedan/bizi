@@ -68,6 +68,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_task_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{run_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_task_run_logs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -81,6 +113,15 @@ export interface components {
         };
         ErrorResponse: {
             message: string;
+        };
+        GetTaskRunLogsResponse: components["schemas"]["GetTaskRunLogsResponseBody"] | components["schemas"]["ErrorResponse"];
+        GetTaskRunLogsResponseBody: {
+            logs: components["schemas"]["TaskRunLogLine"][];
+            runId: string;
+        };
+        GetTaskRunResponse: components["schemas"]["GetTaskRunResponseBody"] | components["schemas"]["ErrorResponse"];
+        GetTaskRunResponseBody: {
+            taskRun: components["schemas"]["TaskRunTreeNode"];
         };
         ListTasksRequest: {
             /** @example /Users/johndoe/documents/github/example-project */
@@ -124,6 +165,29 @@ export interface components {
             } | null;
             /** @description The title of the task. */
             title?: string | null;
+        };
+        TaskRunLogLine: {
+            isStderr: boolean;
+            line: string;
+            runId: string;
+            /** Format: int64 */
+            sequence: number;
+            task: string;
+            /** Format: int64 */
+            timestamp: number;
+        };
+        /** @enum {string} */
+        TaskRunStatus: "Queued" | "Running" | "Success" | "Cancelled" | "Failed";
+        TaskRunTreeNode: {
+            children: components["schemas"]["TaskRunTreeNode"][];
+            cwd: string;
+            id: string;
+            parentRunId?: string | null;
+            status: components["schemas"]["TaskRunStatus"];
+            task: string;
+            /** Format: int64 */
+            updatedAt: number;
+            waitingOn?: string | null;
         };
     };
     responses: never;
@@ -279,6 +343,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StartTaskResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_task_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task run id */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetTaskRunResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_task_run_logs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The task run id */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetTaskRunLogsResponse"];
                 };
             };
             /** @description Not Found */
