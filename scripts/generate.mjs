@@ -1,0 +1,64 @@
+#!/usr/bin/env node
+
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+const OPENAPI_URL = 'http://127.0.0.1:7436/openapi.json';
+const MAX_ATTEMPTS = 30;
+const POLL_MS = 500;
+
+async function waitForOpenApi() {
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    try {
+      const res = await fetch(OPENAPI_URL);
+      if (res.ok) return;
+    } catch {
+      // Server not ready yet
+    }
+    await new Promise((r) => setTimeout(r, POLL_MS));
+  }
+  throw new Error(`Timeout: server did not serve ${OPENAPI_URL} within ${(MAX_ATTEMPTS * POLL_MS) / 1000}s`);
+}
+
+async function run(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      stdio: 'inherit',
+      cwd: rootDir,
+      shell: true,
+      ...opts,
+    });
+    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Command failed with code ${code}`))));
+    child.on('error', reject);
+  });
+}
+
+async function main() {
+  const serverProcess = spawn('cargo', ['run', '-p', 'server'], {
+    stdio: 'pipe',
+    cwd: rootDir,
+  });
+
+  const cleanup = () => {
+    try {
+      serverProcess.kill('SIGTERM');
+    } catch {}
+  };
+
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
+
+  try {
+    await waitForOpenApi();
+    await run('pnpm', ['run', 'generate:clients']);
+  } finally {
+    cleanup();
+  }
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
