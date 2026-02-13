@@ -151,6 +151,9 @@ function App() {
         if (!run) {
             return;
         }
+        if (!canCancelRun(run)) {
+            return;
+        }
         await api.cancelTask(run.id);
         await refreshRuns();
     };
@@ -722,6 +725,19 @@ function sanitizeLogForDisplay(line: string): string {
         .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
         .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
         .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "");
+}
+
+function canCancelRun(run: TaskRunTreeNode): boolean {
+    if (run.status === "Cancelled") {
+        return false;
+    }
+
+    const isLeafRun = run.children.length === 0;
+    if (!isLeafRun) {
+        return true;
+    }
+
+    return run.status !== "Success" && run.status !== "Failed";
 }
 
 render(() => <App />);
