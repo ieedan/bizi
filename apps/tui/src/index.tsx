@@ -71,6 +71,7 @@ function App() {
         }
         return displayStatusByTaskKey().get(row.key);
     });
+    const selectedWaitingOn = createMemo(() => selectedRun()?.waitingOn ?? null);
     const selectedIsSubtask = createMemo(() => (selectedRow()?.depth ?? 0) > 0);
     const hasTaskSelection = createMemo(() => selectedRow() !== null);
     const canNavigateTasks = createMemo(() => taskRows().length > 0);
@@ -364,6 +365,8 @@ function App() {
                     <RunDetailsPanel
                         selectedTaskKey={selectedRow()?.key ?? null}
                         selectedCommand={selectedCommand()}
+                        selectedStatus={selectedDisplayStatus() ?? null}
+                        waitingOn={selectedWaitingOn()}
                         logs={logs()}
                         logColorByTaskKey={logColorByTaskKey()}
                         logLineNumberWidth={logLineNumberWidth()}

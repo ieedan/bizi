@@ -6,6 +6,8 @@ import { formatTaskTagForLog, sanitizeLogForDisplay } from "../lib/logs";
 type RunDetailsPanelProps = {
     selectedTaskKey: string | null;
     selectedCommand: string | null;
+    selectedStatus: string | null;
+    waitingOn: string | null;
     logs: TaskRunLogLine[];
     logColorByTaskKey: Record<string, string>;
     logLineNumberWidth: number;
@@ -15,6 +17,9 @@ type RunDetailsPanelProps = {
 
 export function RunDetailsPanel(props: RunDetailsPanelProps) {
     const { cliOptions } = useAppContext();
+    const waitingOn = () => props.waitingOn?.trim() ?? "";
+    const statusText = () => (props.selectedStatus ?? "-").replace(/\s+/g, " ").trim();
+    const waitingOnText = () => waitingOn().replace(/\s+/g, " ").trim();
 
     return (
         <box
@@ -37,16 +42,25 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
             flexDirection="column"
             paddingX={1}
         >
-            <box flexDirection="row">
+            <box flexDirection="row" height={1} flexShrink={0}>
                 <text>cwd: {cliOptions.cwd}</text>
             </box>
-            <box flexDirection="row">
+            <box flexDirection="row" height={1} flexShrink={0}>
                 <text>task: {props.selectedTaskKey ?? "-"}</text>
             </box>
-            <box flexDirection="row">
+            <box flexDirection="row" height={1} flexShrink={0}>
                 <text>command: {props.selectedCommand ?? "(no command)"}</text>
             </box>
-            <box flexGrow={1} marginTop={1}>
+            <box flexDirection="row" height={1} flexShrink={0}>
+                <text>status: {statusText()}</text>
+            </box>
+            {waitingOnText().length > 0 ? (
+                <box flexDirection="row" height={1} flexShrink={0}>
+                    <text>waiting on: {waitingOnText()}</text>
+                </box>
+            ) : null}
+            <box height={1} flexShrink={0} />
+            <box flexGrow={1}>
                 <scrollbox flexGrow={1} height="100%" focused={props.isFocused} stickyScroll stickyStart="bottom">
                     <For each={props.logs}>
                         {(line, idx) => (
