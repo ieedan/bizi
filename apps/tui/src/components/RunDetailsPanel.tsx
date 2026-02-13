@@ -19,6 +19,7 @@ const LOG_TIMESTAMP_WIDTH = 13;
 export function RunDetailsPanel(props: RunDetailsPanelProps) {
     const { cliOptions } = useAppContext();
     const [nowMs, setNowMs] = createSignal(Date.now());
+    const panelBorderColor = () => (props.isFocused ? "#e6e6e6" : "#666666");
     const waitingOn = () => props.waitingOn?.trim() ?? "";
     const waitingOnText = () => waitingOn().replace(/\s+/g, " ").trim();
     const firstLogTimestamp = createMemo(() => props.logs[0]?.timestamp ?? null);
@@ -39,12 +40,6 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
     });
     const runDurationMs = createMemo(() => runEndTimestamp() - runStartTimestamp());
     const waitingDurationMs = createMemo(() => nowMs() - (props.selectedRunUpdatedAt ?? runStartTimestamp()));
-    const statusTimestamp = createMemo(() => {
-        if (props.selectedRunStatus === "Running" || props.selectedRunStatus === "Queued") {
-            return nowMs();
-        }
-        return props.selectedRunUpdatedAt ?? lastLogTimestamp() ?? nowMs();
-    });
 
     const footerStatusText = createMemo(() => {
         const waitingOnValue = waitingOnText();
@@ -92,26 +87,27 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
     });
 
     return (
-        <box
-            border
-            borderColor={props.isFocused ? "#e6e6e6" : "#666666"}
-            customBorderChars={{
-                topLeft: "┬",
-                topRight: "┐",
-                bottomLeft: "┴",
-                bottomRight: "┤",
-                horizontal: "─",
-                vertical: "│",
-                topT: "┬",
-                bottomT: "┴",
-                leftT: "├",
-                rightT: "┤",
-                cross: "┼",
-            }}
-            flexGrow={1}
-            flexDirection="column"
-        >
-            <box flexGrow={1} paddingX={1}>
+        <box flexGrow={1} flexDirection="column">
+            <box
+                border
+                borderColor={panelBorderColor()}
+                customBorderChars={{
+                    topLeft: "┬",
+                    topRight: "┐",
+                    bottomLeft: "├",
+                    bottomRight: "┤",
+                    horizontal: "─",
+                    vertical: "│",
+                    topT: "┬",
+                    bottomT: "┴",
+                    leftT: "├",
+                    rightT: "┤",
+                    cross: "┼",
+                }}
+                flexGrow={1}
+                flexDirection="column"
+                paddingX={1}
+            >
                 <scrollbox flexGrow={1} height="100%" focused={props.isFocused} stickyScroll stickyStart="bottom">
                     <For each={props.logs}>
                         {(line) => (
@@ -135,17 +131,16 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
                 </scrollbox>
             </box>
             <box
-                border={["top"]}
-                borderColor="#666666"
-                width="100%"
+                border={["left", "right", "bottom"]}
+                borderColor={panelBorderColor()}
                 flexShrink={0}
                 customBorderChars={{
                     topLeft: "├",
                     topRight: "┤",
                     horizontal: "─",
                     vertical: "│",
-                    bottomLeft: "└",
-                    bottomRight: "┘",
+                    bottomLeft: "┴",
+                    bottomRight: "┤",
                     topT: "┬",
                     bottomT: "┴",
                     leftT: "├",
