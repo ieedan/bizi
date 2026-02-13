@@ -688,6 +688,15 @@ pub async fn restart_task(
         );
     }
 
+    if let Err(_) = clear_task_run_logs_for_restart(&state, &run_ids_to_cancel).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(RestartTaskResponse::Error(ErrorResponse {
+                message: "Failed to clear task run logs for restart".to_string(),
+            })),
+        );
+    }
+
     if let Err(_) = prepare_task_runs_for_restart(
         &state,
         &config,
@@ -1523,6 +1532,21 @@ async fn prepare_task_runs_for_restart(
         update_task_run_status(state, &run.id, TaskRunStatus::Queued, waiting_on).await?;
     }
 
+    Ok(())
+}
+
+async fn clear_task_run_logs_for_restart(
+    state: &AppState,
+    run_ids: &[String],
+) -> Result<(), DbErr> {
+    if run_ids.is_empty() {
+        return Ok(());
+    }
+
+    task_run_log::Entity::delete_many()
+        .filter(task_run_log::Column::RunId.is_in(run_ids.to_vec()))
+        .exec(&state.db)
+        .await?;
     Ok(())
 }
 

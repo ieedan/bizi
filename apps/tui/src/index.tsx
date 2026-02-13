@@ -50,6 +50,13 @@ function App() {
         return runByTaskKey().get(row.key);
     });
     const selectedRunId = createMemo(() => selectedRun()?.id ?? null);
+    const selectedRunRevisionKey = createMemo(() => {
+        const run = selectedRun();
+        if (!run) {
+            return null;
+        }
+        return `${run.id}:${run.updatedAt}:${run.status}`;
+    });
     const selectedDisplayStatus = createMemo(() => {
         const row = selectedRow();
         if (!row) {
@@ -58,6 +65,23 @@ function App() {
         return displayStatusByTaskKey().get(row.key);
     });
     const selectedIsSubtask = createMemo(() => (selectedRow()?.depth ?? 0) > 0);
+    const selectedRunAction = createMemo<"run" | "restart">(() => {
+        if (selectedIsSubtask()) {
+            return selectedRun() ? "restart" : "run";
+        }
+
+        const run = selectedRun();
+        if (!run) {
+            return "run";
+        }
+
+        const displayStatus = selectedDisplayStatus();
+        if (displayStatus === "Success" || displayStatus === "Failed") {
+            return "run";
+        }
+
+        return "restart";
+    });
 
     const selectedCommand = createMemo(() => {
         const row = selectedRow();
@@ -117,6 +141,7 @@ function App() {
         if (!run) {
             return;
         }
+        setLogs([]);
         await api.restartTask(run.id);
         await refreshRuns();
     };
@@ -165,12 +190,8 @@ function App() {
             setLogMode((mode) => (mode === "aggregate" ? "selected" : "aggregate"));
             return;
         }
-        if (key.name === "r" && key.shift) {
-            void restartSelectedRun();
-            return;
-        }
         if (key.name === "r") {
-            if (selectedIsSubtask()) {
+            if (selectedRunAction() === "restart") {
                 void restartSelectedRun();
                 return;
             }
@@ -219,6 +240,7 @@ function App() {
     createEffect(() => {
         const row = selectedRow();
         const runId = selectedRunId();
+        selectedRunRevisionKey();
         const includeChildren = logMode() === "aggregate";
         if (!row || !runId) {
             setLogs([]);
@@ -429,7 +451,7 @@ function App() {
 
             <box border={["left", "right", "bottom"]} borderColor="#666666" paddingLeft={1}>
                 <text>
-                    arrows/jk move | jump parents: {isMacOs ? "option+up/down or option+k/j" : "ctrl+up/down or ctrl+k/j"} | r run (root) / restart (subtask) | R restart | c cancel | l log mode | q quit
+                    arrows/jk move | jump parents: {isMacOs ? "option+up/down or option+k/j" : "ctrl+up/down or ctrl+k/j"} | r run/restart (auto) | c cancel | l log mode | q quit
                     {errorMessage() ? ` | error: ${errorMessage()}` : ""}
                 </text>
             </box>
@@ -542,23 +564,26 @@ function isJumpParentsBackwardShortcut(key: {
 }
 
 function indexRunsByTaskKey(taskRuns: TaskRunTreeNode[]): Map<string, TaskRunTreeNode> {
-    const map = new Map<string, TaskRunTreeNode>();
-    const visit = (run: TaskRunTreeNode) => {
+    const map = new Map<string, { run: TaskRunTreeNode; lastActivityAt: number }>();
+    const visit = (run: TaskRunTreeNode): number => {
+        let lastActivityAt = run.updatedAt;
+        for (const child of run.children) {
+            lastActivityAt = Math.max(lastActivityAt, visit(child));
+        }
+
         // The server stores canonical task keys on each run (including children),
         // so using run.task directly avoids duplicating parent prefixes.
         const existing = map.get(run.task);
-        if (!existing || run.updatedAt > existing.updatedAt) {
-            map.set(run.task, run);
+        if (!existing || lastActivityAt > existing.lastActivityAt) {
+            map.set(run.task, { run, lastActivityAt });
         }
-        for (const child of run.children) {
-            visit(child);
-        }
+        return lastActivityAt;
     };
 
     for (const run of taskRuns) {
         visit(run);
     }
-    return map;
+    return new Map([...map.entries()].map(([taskKey, value]) => [taskKey, value.run]));
 }
 
 function upsertRunTreeNode(
