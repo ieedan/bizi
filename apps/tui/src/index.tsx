@@ -11,7 +11,7 @@ import { RunDetailsPanel } from "./components/RunDetailsPanel";
 import { StatusFooter } from "./components/StatusFooter";
 import { TaskTreePanel } from "./components/TaskTreePanel";
 import { AppContextProvider } from "./lib/app-context";
-import { parseCwdArg } from "./lib/args";
+import { parseCliOptions } from "./lib/args";
 import {
     isJumpParentsBackwardShortcut,
     isJumpParentsForwardShortcut,
@@ -26,7 +26,8 @@ import { buildDisplayStatusByTaskKey, canCancelRun, indexRunsByTaskKey, upsertRu
 import type { LogMode } from "./types";
 
 const api = createTaskRunnerApi({ port: 7436 });
-const cwd = parseCwdArg(process.argv.slice(2)) ?? process.cwd();
+const cliOptions = parseCliOptions(process.argv.slice(2));
+const cwd = cliOptions.cwd;
 const isMacOs = process.platform === "darwin";
 
 function App() {
@@ -295,7 +296,7 @@ function App() {
     });
 
     return (
-        <AppContextProvider isMacOs={isMacOs}>
+        <AppContextProvider isMacOs={isMacOs} cliOptions={cliOptions}>
             <box flexDirection="column" height="100%" width="100%">
                 <box flexDirection="row" flexGrow={1}>
                     <TaskTreePanel
@@ -304,7 +305,6 @@ function App() {
                         displayStatusByTaskKey={displayStatusByTaskKey()}
                     />
                     <RunDetailsPanel
-                        cwd={cwd}
                         selectedTaskKey={selectedRow()?.key ?? null}
                         selectedCommand={selectedCommand()}
                         logs={logs()}

@@ -1,9 +1,9 @@
 import type { TaskRunLogLine } from "@task-runner/client-js";
 import { For } from "solid-js";
+import { useAppContext } from "../lib/app-context";
 import { formatTaskTagForLog, sanitizeLogForDisplay } from "../lib/logs";
 
 type RunDetailsPanelProps = {
-    cwd: string;
     selectedTaskKey: string | null;
     selectedCommand: string | null;
     logs: TaskRunLogLine[];
@@ -12,6 +12,8 @@ type RunDetailsPanelProps = {
 };
 
 export function RunDetailsPanel(props: RunDetailsPanelProps) {
+    const { cliOptions } = useAppContext();
+
     return (
         <box
             border
@@ -34,7 +36,7 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
             paddingX={1}
         >
             <box flexDirection="row">
-                <text>cwd: {props.cwd}</text>
+                <text>cwd: {cliOptions.cwd}</text>
             </box>
             <box flexDirection="row">
                 <text>task: {props.selectedTaskKey ?? "-"}</text>

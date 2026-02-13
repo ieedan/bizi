@@ -1,18 +1,25 @@
 import type { ParentProps } from "solid-js";
 import { createContext, useContext } from "solid-js";
+import type { CliOptions } from "./args";
 
 type AppContextValue = {
     isMacOs: boolean;
+    cliOptions: CliOptions;
 };
 
 const AppContext = createContext<AppContextValue>();
 
 type AppContextProviderProps = ParentProps<{
     isMacOs: boolean;
+    cliOptions: CliOptions;
 }>;
 
 export function AppContextProvider(props: AppContextProviderProps) {
-    return <AppContext.Provider value={{ isMacOs: props.isMacOs }}>{props.children}</AppContext.Provider>;
+    return (
+        <AppContext.Provider value={{ isMacOs: props.isMacOs, cliOptions: props.cliOptions }}>
+            {props.children}
+        </AppContext.Provider>
+    );
 }
 
 export function useAppContext(): AppContextValue {

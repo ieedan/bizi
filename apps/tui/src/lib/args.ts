@@ -1,15 +1,20 @@
-export function parseCwdArg(argv: string[]): string | null {
-    for (let index = 0; index < argv.length; index += 1) {
-        const arg = argv[index];
-        if (!arg) {
-            continue;
-        }
-        if (arg === "--cwd") {
-            return argv[index + 1] ?? null;
-        }
-        if (arg.startsWith("--cwd=")) {
-            return arg.slice("--cwd=".length);
-        }
-    }
-    return null;
+import { Command } from "commander";
+import { z } from "zod";
+
+const cliOptionsSchema = z.object({
+    cwd: z.string(),
+});
+
+export type CliOptions = z.infer<typeof cliOptionsSchema>;
+
+export function parseCliOptions(argv: string[]): CliOptions {
+    const program = new Command()
+        .name("task-runner-tui")
+        .allowUnknownOption(false)
+        .allowExcessArguments(false)
+        .option("-C, --cwd <path>", "Set working directory for task discovery and runs", process.cwd());
+
+    program.parse(argv, { from: "user" });
+
+    return cliOptionsSchema.parse(program.opts());
 }
