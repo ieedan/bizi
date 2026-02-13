@@ -3,21 +3,39 @@
     "tasks": {
         "dev": {
             "tasks": {
-                "packages": {
-                    "command": "bun run --filter './packages/*' dev"
-                },
                 "server": {
                     "cwd": "./services/server",
                     "command": "cargo run -- --port 3000"
+                },
+                "generate": {
+                    "command": "bun tsx scripts/generate.ts"
+                },
+                "packages": {
+                    "command": "bun run --filter './packages/*' dev",
+                    "dependsOn": [
+                        "dev:generate"
+                    ]
                 }
             }
         },
         "format": {
-            "command": "cargo fmt"
+            "command": "cargo fmt",
+            "tasks": {
+                "lint": {
+                    "command": "bun run --filter './packages/*' lint",
+                    "tasks": {
+                        "check": {
+                            "command": "bun run --filter './packages/*' check"
+                        }
+                    }
+                }
+            }
         },
         "lint": {
             "command": "bun run --filter './packages/*' lint",
-            "dependsOn": ["format"]
+            "dependsOn": [
+                "format"
+            ]
         },
         "check": {
             "command": "bun run --filter './packages/*' check"

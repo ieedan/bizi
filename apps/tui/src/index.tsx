@@ -16,10 +16,9 @@ type TaskRow = {
 
 type LogMode = "aggregate" | "selected";
 type DisplayTaskStatus = TaskRunTreeNode["status"] | "Indeterminate" | undefined;
-type TaskGroup = {
-    rootKey: string;
-    rootRow: TaskRow | null;
-    children: TaskRow[];
+type TaskTreeNode = {
+    row: TaskRow;
+    children: TaskTreeNode[];
 };
 
 const api = createTaskRunnerApi({ port: 7436 });
@@ -36,8 +35,8 @@ function App() {
     const [logMode, setLogMode] = createSignal<LogMode>("aggregate");
     const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
 
-    const taskRows = createMemo(() => flattenTaskRows(tasks()));
-    const taskGroups = createMemo(() => groupTaskRows(taskRows()));
+    const taskTree = createMemo(() => buildTaskTree(tasks()));
+    const taskRows = createMemo(() => flattenTaskRows(taskTree()));
     const runByTaskKey = createMemo(() => indexRunsByTaskKey(taskRuns()));
     const displayStatusByTaskKey = createMemo(() => buildDisplayStatusByTaskKey(tasks(), runByTaskKey()));
     const rootRunIdsKey = createMemo(() => taskRuns().map((run) => run.id).sort().join("|"));
@@ -291,6 +290,49 @@ function App() {
         });
     });
 
+    const renderTaskNode = (node: TaskTreeNode) => {
+        const nodeDisplayStatus = () => displayStatusByTaskKey().get(node.row.key);
+        const nodeStatusColor = () => taskStatusColor(nodeDisplayStatus());
+        const nodeSelected = () => selectedRow()?.key === node.row.key;
+
+        if (node.children.length === 0) {
+            return (
+                <box
+                    border
+                    borderStyle="rounded"
+                    borderColor={nodeSelected() ? "#e6e6e6" : "#666666"}
+                    paddingLeft={1}
+                    paddingRight={1}
+                    height={3}
+                    alignItems="center"
+                    justifyContent="space-between"
+                    flexDirection="row"
+                >
+                    <text>{node.row.key}</text>
+                    <text fg={nodeStatusColor()}>{taskStatusIcon(nodeDisplayStatus())}</text>
+                </box>
+            );
+        }
+
+        return (
+            <box
+                border
+                borderStyle="rounded"
+                borderColor={nodeSelected() ? "#e6e6e6" : "#666666"}
+                paddingX={1}
+                flexDirection="column"
+            >
+                <box flexDirection="row" justifyContent="space-between" alignItems="center">
+                    <text>{node.row.key}</text>
+                    <text fg={nodeStatusColor()}>{taskStatusIcon(nodeDisplayStatus())}</text>
+                </box>
+                <For each={node.children}>
+                    {(child, i) => <box marginTop={i() === 0 ? 1 : 0}>{renderTaskNode(child)}</box>}
+                </For>
+            </box>
+        );
+    };
+
     return (
         <box flexDirection="column" height="100%" width="100%">
             <box flexDirection="row" flexGrow={1}>
@@ -315,86 +357,8 @@ function App() {
                     paddingX={1}
                 >
                     <scrollbox flexGrow={1} height="100%">
-                        <For each={taskGroups()}>
-                            {(group) => {
-                                const selectedTaskKey = () => selectedRow()?.key;
-                                const rootDisplayStatus = () =>
-                                    displayStatusByTaskKey().get(group.rootKey) ??
-                                    displayStatusByTaskKey().get(group.rootRow?.key ?? "");
-                                const rootStatus = () =>
-                                    taskStatusColor(rootDisplayStatus());
-                                const rootSelected = () => selectedTaskKey() === group.rootRow?.key;
-                                if (group.children.length === 0 && group.rootRow) {
-                                    return (
-                                        <box
-                                            border
-                                            borderStyle="rounded"
-                                            borderColor={rootSelected() ? "#e6e6e6" : "#666666"}
-                                            paddingLeft={1}
-                                            paddingRight={1}
-                                            height={3}
-                                            alignItems="center"
-                                            justifyContent="space-between"
-                                            flexDirection="row"
-                                        >
-                                            <text>{group.rootRow.key}</text>
-                                            <text fg={rootStatus()}>
-                                                {taskStatusIcon(rootDisplayStatus())}
-                                            </text>
-                                        </box>
-                                    );
-                                }
-
-                                return (
-                                    <box
-                                        border
-                                        borderStyle="rounded"
-                                        borderColor={rootSelected() ? "#e6e6e6" : "#666666"}
-                                        paddingX={1}
-                                        flexDirection="column"
-                                    >
-                                        <box
-                                            flexDirection="row"
-                                            justifyContent="space-between"
-                                            alignItems="center"
-                                        >
-                                            <text>{group.rootKey}</text>
-                                            <text fg={rootStatus()}>
-                                                {taskStatusIcon(rootDisplayStatus())}
-                                            </text>
-                                        </box>
-                                        <For each={group.children}>
-                                            {(child, i) => {
-                                                const childDisplayStatus = () =>
-                                                    displayStatusByTaskKey().get(child.key);
-                                                return (
-                                                    <box
-                                                        border
-                                                        borderStyle="rounded"
-                                                        borderColor={
-                                                            selectedTaskKey() === child.key
-                                                                ? "#e6e6e6"
-                                                                : "#666666"
-                                                        }
-                                                        marginTop={i() === 0 ? 1 : 0}
-                                                        paddingLeft={1}
-                                                        paddingRight={1}
-                                                        height={3}
-                                                        alignItems="center"
-                                                        justifyContent="space-between"
-                                                        flexDirection="row"
-                                                    >
-                                                        <text>{child.key}</text>
-                                                        <text fg={taskStatusColor(childDisplayStatus())}>
-                                                            {taskStatusIcon(childDisplayStatus())}
-                                                        </text>
-                                                    </box>
-                                                );
-                                            }}
-                                        </For>
-                                    </box>
-                                );
-                            }}
+                        <For each={taskTree()}>
+                            {(node) => renderTaskNode(node)}
                         </For>
                     </scrollbox>
                 </box>
@@ -489,41 +453,47 @@ function formatTaskTagForLog(taskName: string, width: number): string {
     return `${prefix}${displayTaskName}${suffix}`.padEnd(safeWidth, " ");
 }
 
-function flattenTaskRows(tasks: Record<string, Task>): TaskRow[] {
-    return Object.keys(tasks)
-        .sort((a, b) => a.localeCompare(b))
-        .map((key) => {
-            const segments = key.split(":");
-            return {
-                key,
-                label: segments[segments.length - 1] ?? key,
-                depth: Math.max(0, segments.length - 1),
-            };
-        });
-}
+function flattenTaskRows(taskTree: TaskTreeNode[]): TaskRow[] {
+    const rows: TaskRow[] = [];
 
-function groupTaskRows(taskRows: TaskRow[]): TaskGroup[] {
-    const groups = new Map<string, TaskGroup>();
+    const visit = (node: TaskTreeNode): void => {
+        rows.push(node.row);
+        for (const child of node.children) {
+            visit(child);
+        }
+    };
 
-    for (const row of taskRows) {
-        const rootKey = row.key.split(":")[0] ?? row.key;
-        const existing = groups.get(rootKey);
-        if (!existing) {
-            groups.set(rootKey, {
-                rootKey,
-                rootRow: row.key === rootKey ? row : null,
-                children: row.key === rootKey ? [] : [row],
-            });
-            continue;
-        }
-        if (row.key === rootKey) {
-            existing.rootRow = row;
-            continue;
-        }
-        existing.children.push(row);
+    for (const node of taskTree) {
+        visit(node);
     }
 
-    return [...groups.values()].sort((a, b) => a.rootKey.localeCompare(b.rootKey));
+    return rows;
+}
+
+function buildTaskTree(tasks: Record<string, Task>): TaskTreeNode[] {
+    const buildNode = (taskKey: string): TaskTreeNode => {
+        const childKeys = getDirectChildTaskKeys(tasks, taskKey).sort((a, b) =>
+            a.localeCompare(b),
+        );
+        return {
+            row: createTaskRow(taskKey),
+            children: childKeys.map((childKey) => buildNode(childKey)),
+        };
+    };
+
+    return Object.keys(tasks)
+        .filter((taskKey) => !taskKey.includes(":"))
+        .sort((a, b) => a.localeCompare(b))
+        .map((taskKey) => buildNode(taskKey));
+}
+
+function createTaskRow(taskKey: string): TaskRow {
+    const segments = taskKey.split(":");
+    return {
+        key: taskKey,
+        label: segments[segments.length - 1] ?? taskKey,
+        depth: Math.max(0, segments.length - 1),
+    };
 }
 
 function findNextParentTaskIndex(taskRows: TaskRow[], currentIndex: number): number {
