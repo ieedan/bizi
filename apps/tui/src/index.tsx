@@ -330,6 +330,14 @@ function App() {
 		if (!isTaskSearchFocused()) {
 			return false;
 		}
+		if (key.name === "down" || key.name === "j") {
+			if (taskRows().length > 0) {
+				setSelectedIndex(0);
+				setIsTaskSearchFocused(false);
+				setFocusedPane("tasks");
+			}
+			return true;
+		}
 		if (key.name === "/") {
 			setSuppressNextTaskSearchSlash(true);
 			return true;
@@ -366,27 +374,28 @@ function App() {
 		if (rows.length === 0) {
 			return false;
 		}
-		if (isLogViewFocused() && ["up", "k", "down", "j"].includes(key.name)) {
-			return true;
+		if (isLogViewFocused()) {
+			return ["up", "k", "down", "j"].includes(key.name);
 		}
-		if (
-			!isLogViewFocused() &&
-			isJumpParentsBackwardShortcut(key, isMacOs)
-		) {
+		if (isJumpParentsBackwardShortcut(key, isMacOs)) {
 			setSelectedIndex((idx) =>
 				findPreviousParentTaskIndex(taskRows(), idx)
 			);
 			return true;
 		}
-		if (!isLogViewFocused() && (key.name === "up" || key.name === "k")) {
+		if (key.name === "up" || key.name === "k") {
+			if (selectedIndex() === 0) {
+				focusTaskSearch();
+				return true;
+			}
 			setSelectedIndex((idx) => Math.max(0, idx - 1));
 			return true;
 		}
-		if (!isLogViewFocused() && isJumpParentsForwardShortcut(key, isMacOs)) {
+		if (isJumpParentsForwardShortcut(key, isMacOs)) {
 			setSelectedIndex((idx) => findNextParentTaskIndex(taskRows(), idx));
 			return true;
 		}
-		if (!isLogViewFocused() && (key.name === "down" || key.name === "j")) {
+		if (key.name === "down" || key.name === "j") {
 			setSelectedIndex((idx) => Math.min(rows.length - 1, idx + 1));
 			return true;
 		}

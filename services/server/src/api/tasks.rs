@@ -513,6 +513,7 @@ pub async fn run_task(
         None,
         &included_optional_tasks,
         false,
+        false,
     )
     .await
     {
@@ -1058,8 +1059,11 @@ async fn create_task_run(
     parent_run_id: Option<String>,
     include_tasks: &HashSet<String>,
     start_cancelled: bool,
+    respect_dependencies: bool,
 ) -> Result<task_run::Model, DbErr> {
     let waiting_on = if start_cancelled {
+        None
+    } else if !respect_dependencies {
         None
     } else {
         next_unmet_dependency(&state.db, &cwd, &task).await?
@@ -1551,13 +1555,7 @@ async fn prepare_task_runs_for_restart(
         }
 
         let waiting_on = if run.id == root_run_id {
-            let Some(task) = task_for_run else {
-                return Err(DbErr::Custom(format!(
-                    "Task '{}' missing from config during restart",
-                    run.task
-                )));
-            };
-            next_unmet_dependency(&state.db, &run.cwd, &task).await?
+            None
         } else if let Some(parent_run_id) = run.parent_run_id.as_deref() {
             if run_id_set.contains(parent_run_id) {
                 runs_by_id
@@ -1885,6 +1883,7 @@ async fn trigger_subtasks(
             Some(event.run_id.clone()),
             &include_tasks,
             should_start_cancelled,
+            true,
         )
         .await?;
     }
