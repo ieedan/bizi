@@ -7,6 +7,8 @@ use utoipa::ToSchema;
 pub struct Task {
     /// The title of the task.
     pub title: Option<String>,
+    /// The color used for client-side log rendering for this task.
+    pub color: Option<String>,
     /// The command that the task will run.
     pub command: Option<String>,
     /// Any other task names that this task depends on.

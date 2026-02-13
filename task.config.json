@@ -3,12 +3,18 @@
     "tasks": {
         "dev": {
             "tasks": {
-                "packages": {
-                    "command": "pnpm -r --filter ./packages/* dev"
-                },
                 "server": {
                     "cwd": "./services/server",
                     "command": "cargo run -- --port 3000"
+                },
+                "generate": {
+                    "command": "bun tsx scripts/generate.ts"
+                },
+                "packages": {
+                    "command": "bun run --filter './packages/*' dev",
+                    "dependsOn": [
+                        "dev:generate"
+                    ]
                 }
             }
         },
@@ -16,11 +22,16 @@
             "command": "cargo fmt"
         },
         "lint": {
-            "command": "pnpm lint",
-            "dependsOn": ["format"]
+            "command": "bun run --filter './packages/*' lint",
+            "dependsOn": [
+                "format"
+            ]
         },
         "check": {
-            "command": "pnpm check"
+            "command": "bun run --filter './packages/*' check"
+        },
+        "generate": {
+            "command": "bun tsx scripts/generate.ts"
         }
     }
 }

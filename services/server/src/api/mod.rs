@@ -8,12 +8,13 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api::error::ErrorResponse;
 use crate::api::tasks::{
-    CancelTaskRequest, CancelTaskResponse, CancelTaskResponseBody, ListTasksRequest,
-    GetTaskRunResponse, GetTaskRunResponseBody, ListTasksResponse, ListTasksResponseBody,
-    GetTaskRunLogsResponse, GetTaskRunLogsResponseBody, RestartTaskRequest, RestartTaskResponse,
+    CancelTaskRequest, CancelTaskResponse, CancelTaskResponseBody, GetTaskRunLogsRequest,
+    GetTaskRunLogsResponse, GetTaskRunLogsResponseBody, GetTaskRunResponse, GetTaskRunResponseBody,
+    ListTaskRunsRequest, ListTaskRunsResponse, ListTaskRunsResponseBody, ListTasksRequest,
+    ListTasksResponse, ListTasksResponseBody, RestartTaskRequest, RestartTaskResponse,
     RestartTaskResponseBody, StartTaskRequest, StartTaskResponse, StartTaskResponseBody,
-    TaskRunLogLine, TaskRunTreeNode, cancel_task, get_task_run, get_task_run_logs, list_tasks,
-    restart_task, run_task,
+    TaskRunLogLine, TaskRunTreeNode, cancel_task, get_task_run, get_task_run_logs, list_task_runs,
+    list_tasks, restart_task, run_task,
 };
 use crate::config::Task;
 use crate::db::entities::task_run::TaskRunStatus;
@@ -45,6 +46,7 @@ pub fn create_router(state: AppState) -> Router {
 
     Router::new()
         .route("/api/tasks", get(list_tasks))
+        .route("/api/tasks/runs", get(list_task_runs))
         .route("/api/tasks/:run_id", get(get_task_run))
         .route("/api/tasks/:run_id/logs", get(get_task_run_logs))
         .route("/api/tasks/run", post(run_task))
@@ -58,6 +60,7 @@ pub fn create_router(state: AppState) -> Router {
 #[openapi(
     paths(
         tasks::list_tasks,
+        tasks::list_task_runs,
         tasks::get_task_run,
         tasks::get_task_run_logs,
         tasks::run_task,
@@ -66,12 +69,16 @@ pub fn create_router(state: AppState) -> Router {
     ),
     components(schemas(
         ListTasksRequest,
+        ListTaskRunsRequest,
         ListTasksResponse,
         ListTasksResponseBody,
+        ListTaskRunsResponse,
+        ListTaskRunsResponseBody,
         GetTaskRunResponse,
         GetTaskRunResponseBody,
         GetTaskRunLogsResponse,
         GetTaskRunLogsResponseBody,
+        GetTaskRunLogsRequest,
         TaskRunLogLine,
         TaskRunTreeNode,
         ErrorResponse,

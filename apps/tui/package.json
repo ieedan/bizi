@@ -1,0 +1,26 @@
+{
+  "name": "tui",
+  "module": "src/index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.tsx"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-typescript": "^7.28.5",
+    "@opentui/core": "^0.1.79",
+    "@opentui/solid": "^0.1.79",
+    "@task-runner/client-js": "workspace:*",
+    "babel-preset-solid": "1.9.9",
+    "commander": "^14.0.3",
+    "solid-js": "1.9.9",
+    "zod": "^4.3.6"
+  }
+}

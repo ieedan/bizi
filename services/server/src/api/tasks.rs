@@ -13,8 +13,9 @@ use axum::{
 use futures_util::StreamExt;
 use nanoid::nanoid;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::{NotSet, Set}, ColumnTrait, DatabaseConnection, DbErr,
-    EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
+    ActiveModelTrait,
+    ActiveValue::{NotSet, Set},
+    ColumnTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -34,15 +35,22 @@ use crate::{
 };
 
 const TASK_RUN_ID_ALPHABET: [char; 63] = [
-    '_', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y',
-    'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
-    'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    '_', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+    'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A',
+    'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+    'U', 'V', 'W', 'X', 'Y', 'Z',
 ];
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListTasksRequest {
+    #[schema(example = "/Users/johndoe/documents/github/example-project")]
+    pub cwd: String,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListTaskRunsRequest {
     #[schema(example = "/Users/johndoe/documents/github/example-project")]
     pub cwd: String,
 }
@@ -54,9 +62,23 @@ pub struct ListTasksResponseBody {
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListTaskRunsResponseBody {
+    /// Root task runs for the cwd, each containing nested child runs.
+    pub task_runs: Vec<TaskRunTreeNode>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum ListTasksResponse {
     Success(ListTasksResponseBody),
+    Error(ErrorResponse),
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(untagged)]
+pub enum ListTaskRunsResponse {
+    Success(ListTaskRunsResponseBody),
     Error(ErrorResponse),
 }
 
@@ -133,6 +155,66 @@ pub async fn list_tasks(
 
 #[utoipa::path(
     get,
+    path = "/api/tasks/runs",
+    params(
+        ("cwd" = String, Query, description = "The current working directory to load task runs from"),
+    ),
+    responses(
+        (status = 200, description = "Success", body = ListTaskRunsResponse),
+        (status = 500, description = "Internal Server Error", body = ErrorResponse),
+    )
+)]
+pub async fn list_task_runs(
+    State(state): State<AppState>,
+    Query(payload): Query<ListTaskRunsRequest>,
+) -> (StatusCode, Json<ListTaskRunsResponse>) {
+    let all_runs = match task_run::Entity::find()
+        .filter(task_run::Column::Cwd.eq(payload.cwd.clone()))
+        .all(&state.db)
+        .await
+    {
+        Ok(runs) => runs,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ListTaskRunsResponse::Error(ErrorResponse {
+                    message: "Failed to load task runs".to_string(),
+                })),
+            );
+        }
+    };
+
+    let mut runs_by_id = HashMap::new();
+    let mut children_by_parent: HashMap<String, Vec<String>> = HashMap::new();
+    let mut root_run_ids = Vec::new();
+    for run in all_runs {
+        if let Some(parent_run_id) = run.parent_run_id.clone() {
+            children_by_parent
+                .entry(parent_run_id)
+                .or_default()
+                .push(run.id.clone());
+        } else {
+            root_run_ids.push(run.id.clone());
+        }
+        runs_by_id.insert(run.id.clone(), run);
+    }
+
+    let mut task_runs = root_run_ids
+        .into_iter()
+        .filter_map(|run_id| build_task_run_tree(&run_id, &runs_by_id, &children_by_parent))
+        .collect::<Vec<_>>();
+    task_runs.sort_by_key(|task_run| std::cmp::Reverse(task_run.updated_at));
+
+    (
+        StatusCode::OK,
+        Json(ListTaskRunsResponse::Success(ListTaskRunsResponseBody {
+            task_runs,
+        })),
+    )
+}
+
+#[utoipa::path(
+    get,
     path = "/api/tasks/{run_id}",
     params(
         ("run_id" = String, Path, description = "The task run id"),
@@ -184,6 +266,7 @@ pub async fn get_task_run(
     path = "/api/tasks/{run_id}/logs",
     params(
         ("run_id" = String, Path, description = "The task run id"),
+        ("includeChildren" = Option<bool>, Query, description = "Whether to include logs from descendant task runs"),
     ),
     responses(
         (status = 200, description = "Success", body = GetTaskRunLogsResponse),
@@ -194,21 +277,23 @@ pub async fn get_task_run(
 pub async fn get_task_run_logs(
     State(state): State<AppState>,
     Path(run_id): Path<String>,
+    Query(payload): Query<GetTaskRunLogsRequest>,
     ws: Option<WebSocketUpgrade>,
 ) -> Response {
+    let include_children = payload.include_children.unwrap_or(false);
+
     if let Some(ws) = ws {
         return ws
-            .on_upgrade(move |socket| stream_task_run_logs(socket, state, run_id))
+            .on_upgrade(move |socket| stream_task_run_logs(socket, state, run_id, include_children))
             .into_response();
     }
 
-    match load_task_run_logs(&state, &run_id).await {
+    match load_task_run_logs(&state, &run_id, include_children).await {
         Ok(Some(logs)) => (
             StatusCode::OK,
-            Json(GetTaskRunLogsResponse::Success(GetTaskRunLogsResponseBody {
-                run_id,
-                logs,
-            })),
+            Json(GetTaskRunLogsResponse::Success(
+                GetTaskRunLogsResponseBody { run_id, logs },
+            )),
         )
             .into_response(),
         Ok(None) => (
@@ -312,6 +397,12 @@ pub struct GetTaskRunLogsResponseBody {
     pub logs: Vec<TaskRunLogLine>,
 }
 
+#[derive(Debug, Clone, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTaskRunLogsRequest {
+    pub include_children: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(untagged)]
 pub enum GetTaskRunLogsResponse {
@@ -322,9 +413,16 @@ pub enum GetTaskRunLogsResponse {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum TaskRunLogsStreamMessage {
-    Snapshot { run_id: String, logs: Vec<TaskRunLogLine> },
-    Log { log: TaskRunLogLine },
-    Error { message: String },
+    Snapshot {
+        run_id: String,
+        logs: Vec<TaskRunLogLine>,
+    },
+    Log {
+        log: TaskRunLogLine,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[utoipa::path(
@@ -590,6 +688,15 @@ pub async fn restart_task(
         );
     }
 
+    if let Err(_) = clear_task_run_logs_for_restart(&state, &run_ids_to_cancel).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(RestartTaskResponse::Error(ErrorResponse {
+                message: "Failed to clear task run logs for restart".to_string(),
+            })),
+        );
+    }
+
     if let Err(_) = prepare_task_runs_for_restart(
         &state,
         &config,
@@ -682,7 +789,10 @@ async fn stream_task_run_updates(mut socket: WebSocket, state: AppState, run_id:
     // initial snapshot and entering the receive loop.
     let mut task_events = state.task_events.subscribe();
 
-    if send_task_run_snapshot(&mut socket, &state, &run_id).await.is_err() {
+    if send_task_run_snapshot(&mut socket, &state, &run_id)
+        .await
+        .is_err()
+    {
         return;
     }
 
@@ -712,11 +822,16 @@ async fn stream_task_run_updates(mut socket: WebSocket, state: AppState, run_id:
     }
 }
 
-async fn stream_task_run_logs(mut socket: WebSocket, state: AppState, run_id: String) {
+async fn stream_task_run_logs(
+    mut socket: WebSocket,
+    state: AppState,
+    run_id: String,
+    include_children: bool,
+) {
     // Subscribe first so we do not miss new log lines while sending snapshot.
     let mut log_events = state.task_log_events.subscribe();
 
-    let existing_logs = match load_task_run_logs(&state, &run_id).await {
+    let existing_logs = match load_task_run_logs(&state, &run_id, include_children).await {
         Ok(Some(logs)) => logs,
         Ok(None) => {
             let payload = TaskRunLogsStreamMessage::Error {
@@ -734,6 +849,30 @@ async fn stream_task_run_logs(mut socket: WebSocket, state: AppState, run_id: St
             let _ = socket.send(Message::Close(None)).await;
             return;
         }
+    };
+
+    let mut included_run_ids = if include_children {
+        match load_descendant_run_ids(&state, &run_id).await {
+            Ok(Some(run_ids)) => run_ids,
+            Ok(None) => {
+                let payload = TaskRunLogsStreamMessage::Error {
+                    message: "Task run not found".to_string(),
+                };
+                let _ = send_ws_json(&mut socket, &payload).await;
+                let _ = socket.send(Message::Close(None)).await;
+                return;
+            }
+            Err(_) => {
+                let payload = TaskRunLogsStreamMessage::Error {
+                    message: "Failed to load task run logs".to_string(),
+                };
+                let _ = send_ws_json(&mut socket, &payload).await;
+                let _ = socket.send(Message::Close(None)).await;
+                return;
+            }
+        }
+    } else {
+        HashSet::from([run_id.clone()])
     };
 
     let mut latest_sequence = existing_logs.last().map(|log| log.sequence).unwrap_or(0);
@@ -761,7 +900,13 @@ async fn stream_task_run_logs(mut socket: WebSocket, state: AppState, run_id: St
             }
             event = log_events.recv() => match event {
                 Ok(log) => {
-                    if log.run_id != run_id || log.sequence <= latest_sequence {
+                    if include_children && !included_run_ids.contains(log.run_id.as_str()) {
+                        match load_descendant_run_ids(&state, &run_id).await {
+                            Ok(Some(run_ids)) => included_run_ids = run_ids,
+                            _ => break,
+                        }
+                    }
+                    if !included_run_ids.contains(log.run_id.as_str()) || log.sequence <= latest_sequence {
                         continue;
                     }
                     latest_sequence = log.sequence;
@@ -771,10 +916,16 @@ async fn stream_task_run_logs(mut socket: WebSocket, state: AppState, run_id: St
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => {
-                    let logs = match load_task_run_logs(&state, &run_id).await {
+                    let logs = match load_task_run_logs(&state, &run_id, include_children).await {
                         Ok(Some(logs)) => logs,
                         _ => break,
                     };
+                    if include_children {
+                        match load_descendant_run_ids(&state, &run_id).await {
+                            Ok(Some(run_ids)) => included_run_ids = run_ids,
+                            _ => break,
+                        }
+                    }
                     latest_sequence = logs.last().map(|log| log.sequence).unwrap_or(latest_sequence);
                     let payload = TaskRunLogsStreamMessage::Snapshot {
                         run_id: run_id.clone(),
@@ -813,17 +964,33 @@ async fn send_task_run_snapshot(
     send_ws_json(socket, &payload).await
 }
 
-async fn load_task_run_logs(state: &AppState, run_id: &str) -> Result<Option<Vec<TaskRunLogLine>>, DbErr> {
-    let task_run_exists = task_run::Entity::find_by_id(run_id.to_string())
-        .one(&state.db)
-        .await?
-        .is_some();
-    if !task_run_exists {
+async fn load_task_run_logs(
+    state: &AppState,
+    run_id: &str,
+    include_children: bool,
+) -> Result<Option<Vec<TaskRunLogLine>>, DbErr> {
+    let run_ids = if include_children {
+        match load_descendant_run_ids(state, run_id).await? {
+            Some(run_ids) => run_ids,
+            None => return Ok(None),
+        }
+    } else {
+        let task_run_exists = task_run::Entity::find_by_id(run_id.to_string())
+            .one(&state.db)
+            .await?
+            .is_some();
+        if !task_run_exists {
+            return Ok(None);
+        }
+        HashSet::from([run_id.to_string()])
+    };
+
+    if run_ids.is_empty() {
         return Ok(None);
     }
 
     let logs = task_run_log::Entity::find()
-        .filter(task_run_log::Column::RunId.eq(run_id.to_string()))
+        .filter(task_run_log::Column::RunId.is_in(run_ids.into_iter().collect::<Vec<_>>()))
         .order_by_asc(task_run_log::Column::Id)
         .all(&state.db)
         .await
@@ -840,6 +1007,27 @@ async fn load_task_run_logs(state: &AppState, run_id: &str) -> Result<Option<Vec
                 .collect::<Vec<_>>()
         })?;
     Ok(Some(logs))
+}
+
+async fn load_descendant_run_ids(
+    state: &AppState,
+    root_run_id: &str,
+) -> Result<Option<HashSet<String>>, DbErr> {
+    let Some(root_run) = task_run::Entity::find_by_id(root_run_id.to_string())
+        .one(&state.db)
+        .await?
+    else {
+        return Ok(None);
+    };
+
+    let all_runs = task_run::Entity::find()
+        .filter(task_run::Column::Cwd.eq(root_run.cwd.clone()))
+        .all(&state.db)
+        .await?;
+    let run_ids = collect_descendant_run_ids(&all_runs, root_run_id)
+        .into_iter()
+        .collect::<HashSet<_>>();
+    Ok(Some(run_ids))
 }
 
 async fn send_ws_json<T: Serialize>(socket: &mut WebSocket, payload: &T) -> Result<(), ()> {
@@ -948,10 +1136,7 @@ fn start_task_run_execution(
     });
 }
 
-async fn mark_task_run_running(
-    state: &AppState,
-    run_id: &str,
-) -> Result<Option<i64>, DbErr> {
+async fn mark_task_run_running(state: &AppState, run_id: &str) -> Result<Option<i64>, DbErr> {
     let Some(task_run) = task_run::Entity::find_by_id(run_id.to_string())
         .one(&state.db)
         .await?
@@ -991,10 +1176,19 @@ async fn run_command(
         return TaskRunStatus::Success;
     }
 
+    append_task_log_line(
+        &state,
+        run_id.clone(),
+        task_key.to_string(),
+        format!("$ {}", command),
+        false,
+    )
+    .await;
+
     let mut command_builder = Command::new("sh");
     command_builder
         .arg("-lc")
-        .arg(command)
+        .arg(command.as_str())
         .current_dir(cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1162,7 +1356,10 @@ fn collect_descendant_run_ids(all_runs: &[task_run::Model], root_run_id: &str) -
     result
 }
 
-async fn load_task_run_tree(state: &AppState, run_id: &str) -> Result<Option<TaskRunTreeNode>, DbErr> {
+async fn load_task_run_tree(
+    state: &AppState,
+    run_id: &str,
+) -> Result<Option<TaskRunTreeNode>, DbErr> {
     let Some(root_run) = task_run::Entity::find_by_id(run_id.to_string())
         .one(&state.db)
         .await?
@@ -1194,7 +1391,11 @@ async fn load_task_run_tree(state: &AppState, run_id: &str) -> Result<Option<Tas
         runs_by_id.insert(run.id.clone(), run);
     }
 
-    Ok(build_task_run_tree(run_id, &runs_by_id, &children_by_parent))
+    Ok(build_task_run_tree(
+        run_id,
+        &runs_by_id,
+        &children_by_parent,
+    ))
 }
 
 fn build_task_run_tree(
@@ -1209,7 +1410,9 @@ fn build_task_run_tree(
         .cloned()
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|child_run_id| build_task_run_tree(&child_run_id, runs_by_id, children_by_parent))
+        .filter_map(|child_run_id| {
+            build_task_run_tree(&child_run_id, runs_by_id, children_by_parent)
+        })
         .collect::<Vec<_>>();
     children.sort_by_key(|child| child.updated_at);
 
@@ -1244,6 +1447,15 @@ async fn cancel_task_runs(state: &AppState, run_ids: &[String]) -> Result<(), Db
         if let Some(cancel_tx) = state.running_processes.lock().await.remove(run_id) {
             let _ = cancel_tx.send(());
         }
+
+        append_task_log_line(
+            state,
+            run_id.clone(),
+            task_run.task.clone(),
+            "canceled".to_string(),
+            false,
+        )
+        .await;
 
         update_task_run_status(state, run_id, TaskRunStatus::Cancelled, None).await?;
     }
@@ -1323,6 +1535,21 @@ async fn prepare_task_runs_for_restart(
     Ok(())
 }
 
+async fn clear_task_run_logs_for_restart(
+    state: &AppState,
+    run_ids: &[String],
+) -> Result<(), DbErr> {
+    if run_ids.is_empty() {
+        return Ok(());
+    }
+
+    task_run_log::Entity::delete_many()
+        .filter(task_run_log::Column::RunId.is_in(run_ids.to_vec()))
+        .exec(&state.db)
+        .await?;
+    Ok(())
+}
+
 pub async fn cancel_all_running_processes(state: &AppState) {
     let cancel_senders = {
         let mut running = state.running_processes.lock().await;
@@ -1337,21 +1564,126 @@ pub async fn cancel_all_running_processes(state: &AppState) {
     }
 }
 
-async fn stream_task_logs<R>(state: AppState, run_id: String, task_key: String, stream: R, is_stderr: bool)
-where
+async fn stream_task_logs<R>(
+    state: AppState,
+    run_id: String,
+    task_key: String,
+    stream: R,
+    is_stderr: bool,
+) where
     R: tokio::io::AsyncRead + Unpin,
 {
-    let mut lines = BufReader::new(stream).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        append_task_log_line(
-            &state,
-            run_id.clone(),
-            task_key.clone(),
-            line,
-            is_stderr,
-        )
-        .await;
+    let mut reader = BufReader::new(stream);
+    let mut bytes = Vec::new();
+
+    loop {
+        bytes.clear();
+        match reader.read_until(b'\n', &mut bytes).await {
+            Ok(0) => break,
+            Ok(_) => {
+                if bytes.ends_with(b"\n") {
+                    bytes.pop();
+                }
+                if bytes.ends_with(b"\r") {
+                    bytes.pop();
+                }
+
+                let decoded = String::from_utf8_lossy(&bytes).into_owned();
+                let line = sanitize_terminal_log_line(&decoded);
+
+                if line.is_empty() && !decoded.is_empty() {
+                    continue;
+                }
+
+                append_task_log_line(&state, run_id.clone(), task_key.clone(), line, is_stderr)
+                    .await;
+            }
+            Err(err) => {
+                eprintln!("Failed to read task log stream for {}: {}", run_id, err);
+                break;
+            }
+        }
     }
+}
+
+fn sanitize_terminal_log_line(line: &str) -> String {
+    let most_recent_segment = line.rsplit('\r').next().unwrap_or(line);
+    strip_ansi_escape_sequences(most_recent_segment)
+}
+
+fn strip_ansi_escape_sequences(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut cleaned = Vec::with_capacity(bytes.len());
+    let mut index = 0usize;
+
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte == 0x1b {
+            index += 1;
+            if index >= bytes.len() {
+                break;
+            }
+
+            let next = bytes[index];
+            match next {
+                b'[' => {
+                    index += 1;
+                    while index < bytes.len() {
+                        let b = bytes[index];
+                        index += 1;
+                        if (0x40..=0x7e).contains(&b) {
+                            break;
+                        }
+                    }
+                }
+                b']' => {
+                    index += 1;
+                    while index < bytes.len() {
+                        if bytes[index] == 0x07 {
+                            index += 1;
+                            break;
+                        }
+                        if bytes[index] == 0x1b
+                            && index + 1 < bytes.len()
+                            && bytes[index + 1] == b'\\'
+                        {
+                            index += 2;
+                            break;
+                        }
+                        index += 1;
+                    }
+                }
+                b'P' | b'X' | b'^' | b'_' => {
+                    index += 1;
+                    while index < bytes.len() {
+                        if bytes[index] == 0x1b
+                            && index + 1 < bytes.len()
+                            && bytes[index + 1] == b'\\'
+                        {
+                            index += 2;
+                            break;
+                        }
+                        index += 1;
+                    }
+                }
+                _ => {
+                    // Skip simple two-byte escape forms.
+                    index += 1;
+                }
+            }
+            continue;
+        }
+
+        if byte.is_ascii_control() && byte != b'\t' {
+            index += 1;
+            continue;
+        }
+
+        cleaned.push(byte);
+        index += 1;
+    }
+
+    String::from_utf8_lossy(&cleaned).into_owned()
 }
 
 async fn append_task_log_line(
@@ -1415,7 +1747,10 @@ async fn update_task_run_status(
     Ok(())
 }
 
-async fn trigger_subtasks(state: &AppState, event: &TaskRunStatusChangedEvent) -> Result<(), DbErr> {
+async fn trigger_subtasks(
+    state: &AppState,
+    event: &TaskRunStatusChangedEvent,
+) -> Result<(), DbErr> {
     let config = match Config::load(&event.cwd).await {
         Ok(config) => config,
         Err(err) => {
