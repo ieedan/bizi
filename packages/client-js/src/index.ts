@@ -74,9 +74,9 @@ export function createTaskRunnerApi(options: Partial<ClientOptions> = {}) {
                 },
             });
         },
-        runTask(task: string, cwd: string) {
+        runTask(task: string, cwd: string, includeTasks?: string[]) {
             return client.POST('/api/tasks/run', {
-                body: { task, cwd },
+                body: { task, cwd, includeTasks },
             });
         },
         cancelTask(runId: string) {

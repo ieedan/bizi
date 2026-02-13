@@ -171,6 +171,7 @@ export interface components {
         };
         StartTaskRequest: {
             cwd: string;
+            includeTasks?: string[] | null;
             task: string;
         };
         StartTaskResponse: components["schemas"]["StartTaskResponseBody"] | components["schemas"]["ErrorResponse"];
@@ -373,6 +374,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StartTaskResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Not Found */

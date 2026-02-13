@@ -318,6 +318,7 @@ pub async fn get_task_run_logs(
 pub struct StartTaskRequest {
     pub task: String,
     pub cwd: String,
+    pub include_tasks: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -431,6 +432,7 @@ enum TaskRunLogsStreamMessage {
     request_body = StartTaskRequest,
     responses(
         (status = 200, description = "Success", body = StartTaskResponse),
+        (status = 400, description = "Bad Request", body = ErrorResponse),
         (status = 404, description = "Not Found", body = ErrorResponse),
         (status = 500, description = "Internal Server Error", body = ErrorResponse),
     )
@@ -472,6 +474,17 @@ pub async fn run_task(
         }
     };
 
+    let included_optional_tasks =
+        match validate_included_optional_tasks(&config, &payload.task, payload.include_tasks) {
+            Ok(include_tasks) => include_tasks,
+            Err(message) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(StartTaskResponse::Error(ErrorResponse { message })),
+                );
+            }
+        };
+
     let existing_running_run_id =
         match find_existing_running_run_id(&state, &payload.cwd, &payload.task, &task).await {
             Ok(existing_run_id) => existing_run_id,
@@ -498,6 +511,8 @@ pub async fn run_task(
         task,
         payload.cwd.clone(),
         None,
+        &included_optional_tasks,
+        false,
     )
     .await
     {
@@ -1041,20 +1056,36 @@ async fn create_task_run(
     task: Task,
     cwd: String,
     parent_run_id: Option<String>,
+    include_tasks: &HashSet<String>,
+    start_cancelled: bool,
 ) -> Result<task_run::Model, DbErr> {
-    let waiting_on = next_unmet_dependency(&state.db, &cwd, &task).await?;
+    let waiting_on = if start_cancelled {
+        None
+    } else {
+        next_unmet_dependency(&state.db, &cwd, &task).await?
+    };
+    let status = if start_cancelled {
+        TaskRunStatus::Cancelled
+    } else {
+        TaskRunStatus::Queued
+    };
 
     let model = task_run::ActiveModel {
         id: Set(nanoid!(21, &TASK_RUN_ID_ALPHABET)),
         task: Set(task_key),
         cwd: Set(cwd),
         parent_run_id: Set(parent_run_id),
-        status: Set(TaskRunStatus::Queued),
+        status: Set(status),
         updated_at: Set(chrono::Utc::now().timestamp_millis()),
         waiting_on: Set(waiting_on),
     };
 
     let task_run = model.insert(&state.db).await?;
+    state
+        .run_include_tasks
+        .lock()
+        .await
+        .insert(task_run.id.clone(), include_tasks.clone());
     let _ = state.task_events.send(TaskRunStatusChangedEvent {
         run_id: task_run.id.clone(),
         task: task_run.task.clone(),
@@ -1062,7 +1093,7 @@ async fn create_task_run(
         status: task_run.status,
     });
 
-    if task_run.waiting_on.is_none() {
+    if task_run.status == TaskRunStatus::Queued && task_run.waiting_on.is_none() {
         start_task_run_execution(
             state.clone(),
             task_run.id.clone(),
@@ -1502,9 +1533,25 @@ async fn prepare_task_runs_for_restart(
         let Some(run) = runs_by_id.get(run_id.as_str()) else {
             continue;
         };
+        let task_for_run = config.get_task(run.task.clone());
+        let is_optional = task_for_run
+            .as_ref()
+            .and_then(|task| task.optional)
+            .unwrap_or(false);
+        let was_previously_active = matches!(
+            run.status,
+            TaskRunStatus::Queued
+                | TaskRunStatus::Running
+                | TaskRunStatus::Success
+                | TaskRunStatus::Failed
+        );
+        if run.id != root_run_id && is_optional && !was_previously_active {
+            update_task_run_status(state, &run.id, TaskRunStatus::Cancelled, None).await?;
+            continue;
+        }
 
         let waiting_on = if run.id == root_run_id {
-            let Some(task) = config.get_task(run.task.clone()) else {
+            let Some(task) = task_for_run else {
                 return Err(DbErr::Custom(format!(
                     "Task '{}' missing from config during restart",
                     run.task
@@ -1517,13 +1564,13 @@ async fn prepare_task_runs_for_restart(
                     .get(parent_run_id)
                     .map(|parent_run| parent_run.task.clone())
             } else {
-                let Some(task) = config.get_task(run.task.clone()) else {
+                let Some(task) = task_for_run else {
                     continue;
                 };
                 next_unmet_dependency(&state.db, &run.cwd, &task).await?
             }
         } else {
-            let Some(task) = config.get_task(run.task.clone()) else {
+            let Some(task) = task_for_run else {
                 continue;
             };
             next_unmet_dependency(&state.db, &run.cwd, &task).await?
@@ -1533,6 +1580,41 @@ async fn prepare_task_runs_for_restart(
     }
 
     Ok(())
+}
+
+fn validate_included_optional_tasks(
+    config: &Config,
+    root_task_key: &str,
+    include_tasks: Option<Vec<String>>,
+) -> Result<HashSet<String>, String> {
+    let mut included = HashSet::new();
+    let root_prefix = format!("{}:", root_task_key);
+    for task_key in include_tasks.unwrap_or_default() {
+        let trimmed = task_key.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !trimmed.contains(':') {
+            return Err(format!(
+                "Included task '{}' must use a full key like '{}:child'",
+                trimmed, root_task_key
+            ));
+        }
+        if !trimmed.starts_with(&root_prefix) {
+            return Err(format!(
+                "Included task '{}' must be a descendant of '{}'",
+                trimmed, root_task_key
+            ));
+        }
+        if config.get_task(trimmed.to_string()).is_none() {
+            return Err(format!(
+                "Included task '{}' was not found in task config",
+                trimmed
+            ));
+        }
+        included.insert(trimmed.to_string());
+    }
+    Ok(included)
 }
 
 async fn clear_task_run_logs_for_restart(
@@ -1766,12 +1848,21 @@ async fn trigger_subtasks(
     let Some(subtasks) = parent_task.tasks else {
         return Ok(());
     };
+    let include_tasks = state
+        .run_include_tasks
+        .lock()
+        .await
+        .get(&event.run_id)
+        .cloned()
+        .unwrap_or_default();
 
     for (subtask_key, _) in subtasks {
         let full_subtask_key = format!("{}:{}", event.task, subtask_key);
         let Some(subtask) = config.get_task(full_subtask_key.clone()) else {
             continue;
         };
+        let should_start_cancelled =
+            subtask.optional.unwrap_or(false) && !include_tasks.contains(&full_subtask_key);
 
         // When a run is restarted in-place, existing subtask runs for the same parent run
         // should be reused instead of creating duplicate child rows.
@@ -1792,6 +1883,8 @@ async fn trigger_subtasks(
             subtask,
             event.cwd.clone(),
             Some(event.run_id.clone()),
+            &include_tasks,
+            should_start_cancelled,
         )
         .await?;
     }

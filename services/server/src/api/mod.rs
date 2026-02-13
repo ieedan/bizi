@@ -1,7 +1,10 @@
 use axum::routing::post;
 use axum::{Router, routing::get};
 use sea_orm::DatabaseConnection;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tokio::sync::{Mutex, broadcast, oneshot};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -28,6 +31,7 @@ pub struct AppState {
     pub task_events: broadcast::Sender<tasks::TaskRunStatusChangedEvent>,
     pub task_log_events: broadcast::Sender<tasks::TaskRunLogLine>,
     pub running_processes: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    pub run_include_tasks: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 }
 
 pub fn create_app_state(db: DatabaseConnection) -> AppState {
@@ -38,6 +42,7 @@ pub fn create_app_state(db: DatabaseConnection) -> AppState {
         task_events,
         task_log_events,
         running_processes: Arc::new(Mutex::new(HashMap::new())),
+        run_include_tasks: Arc::new(Mutex::new(HashMap::new())),
     }
 }
 
