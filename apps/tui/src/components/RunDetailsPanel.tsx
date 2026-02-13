@@ -1,25 +1,95 @@
 import type { TaskRunLogLine } from "@task-runner/client-js";
-import { For } from "solid-js";
+import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { useAppContext } from "../lib/app-context";
-import { formatTaskTagForLog, sanitizeLogForDisplay } from "../lib/logs";
+import { formatElapsedDuration, formatLogTimestamp, formatTaskTagForLog, sanitizeLogForDisplay } from "../lib/logs";
 
 type RunDetailsPanelProps = {
-    selectedTaskKey: string | null;
-    selectedCommand: string | null;
     selectedStatus: string | null;
+    selectedRunStatus: "Queued" | "Running" | "Success" | "Cancelled" | "Failed" | null;
+    selectedRunUpdatedAt: number | null;
     waitingOn: string | null;
     logs: TaskRunLogLine[];
     logColorByTaskKey: Record<string, string>;
-    logLineNumberWidth: number;
     logTaskTagWidth: number;
     isFocused: boolean;
 };
 
+const LOG_TIMESTAMP_WIDTH = 13;
+
 export function RunDetailsPanel(props: RunDetailsPanelProps) {
     const { cliOptions } = useAppContext();
+    const [nowMs, setNowMs] = createSignal(Date.now());
     const waitingOn = () => props.waitingOn?.trim() ?? "";
-    const statusText = () => (props.selectedStatus ?? "-").replace(/\s+/g, " ").trim();
     const waitingOnText = () => waitingOn().replace(/\s+/g, " ").trim();
+    const firstLogTimestamp = createMemo(() => props.logs[0]?.timestamp ?? null);
+    const lastLogTimestamp = createMemo(() => props.logs.at(-1)?.timestamp ?? null);
+
+    onMount(() => {
+        const timer = setInterval(() => setNowMs(Date.now()), 250);
+        onCleanup(() => clearInterval(timer));
+    });
+
+    const runStartTimestamp = createMemo(() => firstLogTimestamp() ?? props.selectedRunUpdatedAt ?? nowMs());
+    const runEndTimestamp = createMemo(() => {
+        const status = props.selectedRunStatus;
+        if (status === "Running" || status === "Queued") {
+            return nowMs();
+        }
+        return lastLogTimestamp() ?? props.selectedRunUpdatedAt ?? nowMs();
+    });
+    const runDurationMs = createMemo(() => runEndTimestamp() - runStartTimestamp());
+    const waitingDurationMs = createMemo(() => nowMs() - (props.selectedRunUpdatedAt ?? runStartTimestamp()));
+    const statusTimestamp = createMemo(() => {
+        if (props.selectedRunStatus === "Running" || props.selectedRunStatus === "Queued") {
+            return nowMs();
+        }
+        return props.selectedRunUpdatedAt ?? lastLogTimestamp() ?? nowMs();
+    });
+
+    const footerStatusText = createMemo(() => {
+        const waitingOnValue = waitingOnText();
+        if (waitingOnValue.length > 0) {
+            return `Waiting on ${waitingOnValue} for ${formatElapsedDuration(waitingDurationMs())}`;
+        }
+
+        const runStatus = props.selectedRunStatus;
+        if (runStatus === "Running") {
+            return `Running for ${formatElapsedDuration(runDurationMs())}`;
+        }
+        if (runStatus === "Cancelled") {
+            return `Canceled after ${formatElapsedDuration(runDurationMs())}`;
+        }
+        if (runStatus === "Success") {
+            return `Succeeded in ${formatElapsedDuration(runDurationMs())}`;
+        }
+        if (runStatus === "Failed") {
+            return `Failed after ${formatElapsedDuration(runDurationMs())}`;
+        }
+        if (runStatus === "Queued") {
+            return `Queued for ${formatElapsedDuration(runDurationMs())}`;
+        }
+
+        return (props.selectedStatus ?? "Idle").replace(/\s+/g, " ").trim();
+    });
+    const statusIndicator = createMemo(() => {
+        const runStatus = props.selectedRunStatus;
+        if (runStatus === "Running") {
+            return { icon: "▶", color: "#31d158" };
+        }
+        if (runStatus === "Success") {
+            return { icon: "✓", color: "#4da3ff" };
+        }
+        if (runStatus === "Failed") {
+            return { icon: "✖", color: "#ff3b30" };
+        }
+        if (runStatus === "Cancelled") {
+            return { icon: "■", color: "#777777" };
+        }
+        if (runStatus === "Queued") {
+            return { icon: "○", color: "#f4c542" };
+        }
+        return { icon: "○", color: "#777777" };
+    });
 
     return (
         <box
@@ -40,34 +110,15 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
             }}
             flexGrow={1}
             flexDirection="column"
-            paddingX={1}
         >
-            <box flexDirection="row" height={1} flexShrink={0}>
-                <text>cwd: {cliOptions.cwd}</text>
-            </box>
-            <box flexDirection="row" height={1} flexShrink={0}>
-                <text>task: {props.selectedTaskKey ?? "-"}</text>
-            </box>
-            <box flexDirection="row" height={1} flexShrink={0}>
-                <text>command: {props.selectedCommand ?? "(no command)"}</text>
-            </box>
-            <box flexDirection="row" height={1} flexShrink={0}>
-                <text>status: {statusText()}</text>
-            </box>
-            {waitingOnText().length > 0 ? (
-                <box flexDirection="row" height={1} flexShrink={0}>
-                    <text>waiting on: {waitingOnText()}</text>
-                </box>
-            ) : null}
-            <box height={1} flexShrink={0} />
-            <box flexGrow={1}>
+            <box flexGrow={1} paddingX={1}>
                 <scrollbox flexGrow={1} height="100%" focused={props.isFocused} stickyScroll stickyStart="bottom">
                     <For each={props.logs}>
-                        {(line, idx) => (
+                        {(line) => (
                             <box flexDirection="row">
-                                <box width={props.logLineNumberWidth + 1} flexShrink={0}>
+                                <box width={LOG_TIMESTAMP_WIDTH + 1} flexShrink={0}>
                                     <text fg="#666666">
-                                        {String(idx() + 1).padStart(props.logLineNumberWidth, " ")}{" "}
+                                        {formatLogTimestamp(line.timestamp)}{" "}
                                     </text>
                                 </box>
                                 <box width={props.logTaskTagWidth} flexShrink={0}>
@@ -82,6 +133,35 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
                         )}
                     </For>
                 </scrollbox>
+            </box>
+            <box
+                border={["top"]}
+                borderColor="#666666"
+                width="100%"
+                flexShrink={0}
+                customBorderChars={{
+                    topLeft: "├",
+                    topRight: "┤",
+                    horizontal: "─",
+                    vertical: "│",
+                    bottomLeft: "└",
+                    bottomRight: "┘",
+                    topT: "┬",
+                    bottomT: "┴",
+                    leftT: "├",
+                    rightT: "┤",
+                    cross: "┼",
+                }}
+            >
+                <box flexDirection="row" justifyContent="space-between" width="100%" paddingLeft={1} paddingRight={1}>
+                    <box flexDirection="row">
+                        <text fg={statusIndicator().color}>{statusIndicator().icon}</text>
+                        <text> {footerStatusText()}</text>
+                    </box>
+                    <text>
+                        <span style={{ fg: "#666666" }}>{cliOptions.cwd}</span>
+                    </text>
+                </box>
             </box>
         </box>
     );

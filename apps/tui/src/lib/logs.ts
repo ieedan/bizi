@@ -37,3 +37,34 @@ export function sanitizeLogForDisplay(line: string): string {
         .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
         .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "");
 }
+
+export function formatLogTimestamp(timestampMs: number): string {
+    const date = new Date(timestampMs);
+    if (Number.isNaN(date.getTime())) {
+        return "--:--:--.---";
+    }
+
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    const millis = String(date.getMilliseconds()).padStart(3, "0");
+    return `${hours}:${minutes}:${seconds}.${millis}`;
+}
+
+export function formatElapsedDuration(durationMs: number): string {
+    const safeDuration = Math.max(0, durationMs);
+    if (safeDuration < 1_000) {
+        return `${Math.round(safeDuration)}ms`;
+    }
+    if (safeDuration < 60_000) {
+        return `${Math.floor(safeDuration / 1_000)}s`;
+    }
+    if (safeDuration < 3_600_000) {
+        const minutes = Math.floor(safeDuration / 60_000);
+        const seconds = Math.floor((safeDuration % 60_000) / 1_000);
+        return `${minutes}m ${seconds}s`;
+    }
+    const hours = Math.floor(safeDuration / 3_600_000);
+    const minutes = Math.floor((safeDuration % 3_600_000) / 60_000);
+    return `${hours}h ${minutes}m`;
+}

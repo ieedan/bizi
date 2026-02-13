@@ -126,7 +126,6 @@ function App() {
         }
         return canCancelRun(run);
     });
-    const logLineNumberWidth = createMemo(() => Math.max(4, String(logs().length).length));
     const isLogViewFocused = createMemo(() => focusedPane() === "logs");
     const logTaskTagWidth = createMemo(() => {
         const longestTaskName = logs().reduce((max, line) => Math.max(max, line.task.length), 0);
@@ -363,13 +362,12 @@ function App() {
                         displayStatusByTaskKey={displayStatusByTaskKey()}
                     />
                     <RunDetailsPanel
-                        selectedTaskKey={selectedRow()?.key ?? null}
-                        selectedCommand={selectedCommand()}
                         selectedStatus={selectedDisplayStatus() ?? null}
+                        selectedRunStatus={selectedRun()?.status ?? null}
+                        selectedRunUpdatedAt={selectedRun()?.updatedAt ?? null}
                         waitingOn={selectedWaitingOn()}
                         logs={logs()}
                         logColorByTaskKey={logColorByTaskKey()}
-                        logLineNumberWidth={logLineNumberWidth()}
                         logTaskTagWidth={logTaskTagWidth()}
                         isFocused={isLogViewFocused()}
                     />
