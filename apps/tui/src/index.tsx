@@ -57,6 +57,7 @@ function App() {
         }
         return displayStatusByTaskKey().get(row.key);
     });
+    const selectedIsSubtask = createMemo(() => (selectedRow()?.depth ?? 0) > 0);
 
     const selectedCommand = createMemo(() => {
         const row = selectedRow();
@@ -66,6 +67,10 @@ function App() {
         return tasks()[row.key]?.command ?? null;
     });
     const logLineNumberWidth = createMemo(() => Math.max(4, String(logs().length).length));
+    const logTaskTagWidth = createMemo(() => {
+        const longestTaskName = logs().reduce((max, line) => Math.max(max, line.task.length), 0);
+        return Math.min(40, Math.max(10, longestTaskName + 3));
+    });
 
     createEffect(() => {
         const rows = taskRows();
@@ -165,6 +170,10 @@ function App() {
             return;
         }
         if (key.name === "r") {
+            if (selectedIsSubtask()) {
+                void restartSelectedRun();
+                return;
+            }
             void runSelectedTask();
             return;
         }
@@ -271,11 +280,11 @@ function App() {
                         <For each={taskGroups()}>
                             {(group) => {
                                 const selectedTaskKey = () => selectedRow()?.key;
+                                const rootDisplayStatus = () =>
+                                    displayStatusByTaskKey().get(group.rootKey) ??
+                                    displayStatusByTaskKey().get(group.rootRow?.key ?? "");
                                 const rootStatus = () =>
-                                    taskStatusColor(
-                                        displayStatusByTaskKey().get(group.rootKey) ??
-                                            displayStatusByTaskKey().get(group.rootRow?.key ?? ""),
-                                    );
+                                    taskStatusColor(rootDisplayStatus());
                                 const rootSelected = () => selectedTaskKey() === group.rootRow?.key;
                                 if (group.children.length === 0 && group.rootRow) {
                                     return (
@@ -291,7 +300,9 @@ function App() {
                                             flexDirection="row"
                                         >
                                             <text>{group.rootRow.key}</text>
-                                            <text fg={rootStatus()}>●</text>
+                                            <text fg={rootStatus()}>
+                                                {taskStatusIcon(rootDisplayStatus())}
+                                            </text>
                                         </box>
                                     );
                                 }
@@ -311,36 +322,38 @@ function App() {
                                             alignItems="center"
                                         >
                                             <text>{group.rootKey}</text>
-                                            <text fg={rootStatus()}>●</text>
+                                            <text fg={rootStatus()}>
+                                                {taskStatusIcon(rootDisplayStatus())}
+                                            </text>
                                         </box>
                                         <For each={group.children}>
-                                            {(child) => (
-                                                <box
-                                                    border
-                                                    borderStyle="rounded"
-                                                    borderColor={
-                                                        selectedTaskKey() === child.key
-                                                            ? "#e6e6e6"
-                                                            : "#666666"
-                                                    }
-                                                    marginTop={1}
-                                                    paddingLeft={1}
-                                                    paddingRight={1}
-                                                    height={3}
-                                                    alignItems="center"
-                                                    justifyContent="space-between"
-                                                    flexDirection="row"
-                                                >
-                                                    <text>{child.key}</text>
-                                                    <text
-                                                        fg={taskStatusColor(
-                                                            displayStatusByTaskKey().get(child.key),
-                                                        )}
+                                            {(child) => {
+                                                const childDisplayStatus = () =>
+                                                    displayStatusByTaskKey().get(child.key);
+                                                return (
+                                                    <box
+                                                        border
+                                                        borderStyle="rounded"
+                                                        borderColor={
+                                                            selectedTaskKey() === child.key
+                                                                ? "#e6e6e6"
+                                                                : "#666666"
+                                                        }
+                                                        marginTop={1}
+                                                        paddingLeft={1}
+                                                        paddingRight={1}
+                                                        height={3}
+                                                        alignItems="center"
+                                                        justifyContent="space-between"
+                                                        flexDirection="row"
                                                     >
-                                                        ●
-                                                    </text>
-                                                </box>
-                                            )}
+                                                        <text>{child.key}</text>
+                                                        <text fg={taskStatusColor(childDisplayStatus())}>
+                                                            {taskStatusIcon(childDisplayStatus())}
+                                                        </text>
+                                                    </box>
+                                                );
+                                            }}
                                         </For>
                                     </box>
                                 );
@@ -375,7 +388,9 @@ function App() {
                                                 {String(idx() + 1).padStart(logLineNumberWidth(), " ")}{" "}
                                             </text>
                                         </box>
-                                        <text>[{line.task}] </text>
+                                        <box width={logTaskTagWidth()} flexShrink={0}>
+                                            <text>{formatTaskTagForLog(line.task, logTaskTagWidth())}</text>
+                                        </box>
                                         <box flexGrow={1}>
                                             <text>{sanitizeLogForDisplay(line.line)}</text>
                                         </box>
@@ -389,7 +404,7 @@ function App() {
 
             <box border borderColor="#666666" paddingLeft={1}>
                 <text>
-                    arrows/jk move | jump parents: {isMacOs ? "option+up/down or option+k/j" : "ctrl+up/down or ctrl+k/j"} | r run | R restart | c cancel | l log mode | q quit
+                    arrows/jk move | jump parents: {isMacOs ? "option+up/down or option+k/j" : "ctrl+up/down or ctrl+k/j"} | r run (root) / restart (subtask) | R restart | c cancel | l log mode | q quit
                     {errorMessage() ? ` | error: ${errorMessage()}` : ""}
                 </text>
             </box>
@@ -411,6 +426,17 @@ function parseCwdArg(argv: string[]): string | null {
         }
     }
     return null;
+}
+
+function formatTaskTagForLog(taskName: string, width: number): string {
+    const minWidth = 4;
+    const safeWidth = Math.max(minWidth, width);
+    const suffix = "] ";
+    const prefix = "[";
+    const innerWidth = Math.max(1, safeWidth - prefix.length - suffix.length);
+    const displayTaskName =
+        taskName.length > innerWidth ? `${taskName.slice(0, Math.max(1, innerWidth - 1))}…` : taskName;
+    return `${prefix}${displayTaskName}${suffix}`.padEnd(safeWidth, " ");
 }
 
 function flattenTaskRows(tasks: Record<string, Task>): TaskRow[] {
@@ -569,12 +595,34 @@ function taskStatusColor(status: DisplayTaskStatus): string {
         return "#4da3ff";
     }
     if (status === "Failed") {
-        return "#ff9f1a";
+        return "#ff3b30";
     }
     if (status === "Cancelled") {
         return "#777777";
     }
     return "gray";
+}
+
+function taskStatusIcon(status: DisplayTaskStatus): string {
+    if (!status) {
+        return "○";
+    }
+    if (status === "Indeterminate") {
+        return "◐";
+    }
+    if (status === "Running") {
+        return "▶";
+    }
+    if (status === "Success") {
+        return "✓";
+    }
+    if (status === "Failed") {
+        return "✖";
+    }
+    if (status === "Cancelled") {
+        return "■";
+    }
+    return "○";
 }
 
 function buildDisplayStatusByTaskKey(
