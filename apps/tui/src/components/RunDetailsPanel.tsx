@@ -1,0 +1,68 @@
+import type { TaskRunLogLine } from "@task-runner/client-js";
+import { For } from "solid-js";
+import { formatTaskTagForLog, sanitizeLogForDisplay } from "../lib/logs";
+
+type RunDetailsPanelProps = {
+    cwd: string;
+    selectedTaskKey: string | null;
+    selectedCommand: string | null;
+    logs: TaskRunLogLine[];
+    logLineNumberWidth: number;
+    logTaskTagWidth: number;
+};
+
+export function RunDetailsPanel(props: RunDetailsPanelProps) {
+    return (
+        <box
+            border
+            borderColor="#666666"
+            customBorderChars={{
+                topLeft: "┬",
+                topRight: "┐",
+                bottomLeft: "┴",
+                bottomRight: "┤",
+                horizontal: "─",
+                vertical: "│",
+                topT: "┬",
+                bottomT: "┴",
+                leftT: "├",
+                rightT: "┤",
+                cross: "┼",
+            }}
+            flexGrow={1}
+            flexDirection="column"
+            paddingX={1}
+        >
+            <box flexDirection="row">
+                <text>cwd: {props.cwd}</text>
+            </box>
+            <box flexDirection="row">
+                <text>task: {props.selectedTaskKey ?? "-"}</text>
+            </box>
+            <box flexDirection="row">
+                <text>command: {props.selectedCommand ?? "(no command)"}</text>
+            </box>
+            <box flexGrow={1} marginTop={1}>
+                <scrollbox flexGrow={1} height="100%" stickyScroll stickyStart="bottom">
+                    <For each={props.logs}>
+                        {(line, idx) => (
+                            <box flexDirection="row">
+                                <box width={props.logLineNumberWidth + 1} flexShrink={0}>
+                                    <text fg="#666666">
+                                        {String(idx() + 1).padStart(props.logLineNumberWidth, " ")}{" "}
+                                    </text>
+                                </box>
+                                <box width={props.logTaskTagWidth} flexShrink={0}>
+                                    <text>{formatTaskTagForLog(line.task, props.logTaskTagWidth)}</text>
+                                </box>
+                                <box flexGrow={1}>
+                                    <text>{sanitizeLogForDisplay(line.line)}</text>
+                                </box>
+                            </box>
+                        )}
+                    </For>
+                </scrollbox>
+            </box>
+        </box>
+    );
+}
