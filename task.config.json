@@ -4,7 +4,7 @@
         "dev": {
             "tasks": {
                 "packages": {
-                    "command": "pnpm -r --filter ./packages/* dev"
+                    "command": "bun run --filter './packages/*' dev"
                 },
                 "server": {
                     "cwd": "./services/server",
@@ -16,11 +16,14 @@
             "command": "cargo fmt"
         },
         "lint": {
-            "command": "pnpm lint",
+            "command": "bun run --filter './packages/*' lint",
             "dependsOn": ["format"]
         },
         "check": {
-            "command": "pnpm check"
+            "command": "bun run --filter './packages/*' check"
+        },
+        "generate": {
+            "command": "bun tsx scripts/generate.ts"
         }
     }
 }

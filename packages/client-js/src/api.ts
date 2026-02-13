@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_task_runs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{run_id}": {
         parameters: {
             query?: never;
@@ -114,6 +130,9 @@ export interface components {
         ErrorResponse: {
             message: string;
         };
+        GetTaskRunLogsRequest: {
+            includeChildren?: boolean | null;
+        };
         GetTaskRunLogsResponse: components["schemas"]["GetTaskRunLogsResponseBody"] | components["schemas"]["ErrorResponse"];
         GetTaskRunLogsResponseBody: {
             logs: components["schemas"]["TaskRunLogLine"][];
@@ -122,6 +141,15 @@ export interface components {
         GetTaskRunResponse: components["schemas"]["GetTaskRunResponseBody"] | components["schemas"]["ErrorResponse"];
         GetTaskRunResponseBody: {
             taskRun: components["schemas"]["TaskRunTreeNode"];
+        };
+        ListTaskRunsRequest: {
+            /** @example /Users/johndoe/documents/github/example-project */
+            cwd: string;
+        };
+        ListTaskRunsResponse: components["schemas"]["ListTaskRunsResponseBody"] | components["schemas"]["ErrorResponse"];
+        ListTaskRunsResponseBody: {
+            /** @description Root task runs for the cwd, each containing nested child runs. */
+            taskRuns: components["schemas"]["TaskRunTreeNode"][];
         };
         ListTasksRequest: {
             /** @example /Users/johndoe/documents/github/example-project */
@@ -365,6 +393,38 @@ export interface operations {
             };
         };
     };
+    list_task_runs: {
+        parameters: {
+            query: {
+                /** @description The current working directory to load task runs from */
+                cwd: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListTaskRunsResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_task_run: {
         parameters: {
             query?: never;
@@ -408,7 +468,10 @@ export interface operations {
     };
     get_task_run_logs: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Whether to include logs from descendant task runs */
+                includeChildren?: boolean | null;
+            };
             header?: never;
             path: {
                 /** @description The task run id */
