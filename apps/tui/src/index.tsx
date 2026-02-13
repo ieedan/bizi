@@ -268,10 +268,10 @@ function App() {
 
     return (
         <box flexDirection="column" height="100%" width="100%">
-            <box flexDirection="row" flexGrow={1} gap={1}>
+            <box flexDirection="row" flexGrow={1}>
                 <box
                     width={42}
-                    border
+                    border={["top", "left", "bottom"]}
                     borderColor="#666666"
                     flexDirection="column"
                     paddingX={1}
@@ -312,8 +312,7 @@ function App() {
                                         border
                                         borderStyle="rounded"
                                         borderColor={rootSelected() ? "#e6e6e6" : "#666666"}
-                                        paddingLeft={1}
-                                        paddingRight={1}
+                                        paddingX={1}
                                         flexDirection="column"
                                     >
                                         <box
@@ -327,7 +326,7 @@ function App() {
                                             </text>
                                         </box>
                                         <For each={group.children}>
-                                            {(child) => {
+                                            {(child, i) => {
                                                 const childDisplayStatus = () =>
                                                     displayStatusByTaskKey().get(child.key);
                                                 return (
@@ -339,7 +338,7 @@ function App() {
                                                                 ? "#e6e6e6"
                                                                 : "#666666"
                                                         }
-                                                        marginTop={1}
+                                                        marginTop={i() === 0 ? 1 : 0}
                                                         paddingLeft={1}
                                                         paddingRight={1}
                                                         height={3}
@@ -365,6 +364,19 @@ function App() {
                 <box
                     border
                     borderColor="#666666"
+                    customBorderChars={{
+                        topLeft: "┬",
+                        topRight: "┐",
+                        bottomLeft: "┴",
+                        bottomRight: "┘",
+                        horizontal: "─",
+                        vertical: "│",
+                        topT: "┬",
+                        bottomT: "┴",
+                        leftT: "├",
+                        rightT: "┤",
+                        cross: "┼",
+                    }}
                     flexGrow={1}
                     flexDirection="column"
                     paddingX={1}
