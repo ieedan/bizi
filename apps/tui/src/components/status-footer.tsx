@@ -14,6 +14,7 @@ interface StatusFooterProps {
 export function StatusFooter(props: StatusFooterProps) {
 	function actions() {
 		const parts: Array<{ key: string; label: string }> = [];
+		parts.push({ key: "/", label: "find/run" });
 		if (props.canRunOrRestart) {
 			parts.push({ key: "r", label: props.runAction });
 		}

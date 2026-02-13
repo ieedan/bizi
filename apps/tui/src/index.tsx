@@ -54,6 +54,11 @@ function App() {
 	const [focusedPane, setFocusedPane] = createSignal<"tasks" | "logs">(
 		"tasks"
 	);
+	const [taskSearchQuery, setTaskSearchQuery] = createSignal("");
+	const [isTaskSearchFocused, setIsTaskSearchFocused] = createSignal(false);
+	const [suppressNextTaskSearchSlash, setSuppressNextTaskSearchSlash] =
+		createSignal(false);
+	const [showTaskSearchError, setShowTaskSearchError] = createSignal(false);
 	const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
 
 	const taskTree = createMemo(() => buildTaskTree(tasks()));
@@ -205,8 +210,7 @@ function App() {
 		if (!row) {
 			return;
 		}
-		await api.runTask(row.key, cwd);
-		await refreshRuns();
+		await runTaskByKey(row.key);
 	}
 
 	async function restartSelectedRun() {
@@ -214,8 +218,17 @@ function App() {
 		if (!run) {
 			return;
 		}
+		await restartRunById(run.id);
+	}
+
+	async function runTaskByKey(taskKey: string) {
+		await api.runTask(taskKey, cwd);
+		await refreshRuns();
+	}
+
+	async function restartRunById(runId: string) {
 		setLogs([]);
-		await api.restartTask(run.id);
+		await api.restartTask(runId);
 		await refreshRuns();
 	}
 
@@ -233,6 +246,103 @@ function App() {
 
 	function handleQuitKey(key: { name: string; ctrl?: boolean }) {
 		return key.name === "q" || (key.ctrl && key.name === "c");
+	}
+
+	function focusTaskSearch() {
+		setFocusedPane("tasks");
+		setIsTaskSearchFocused(true);
+	}
+
+	function clearTaskSearch() {
+		setTaskSearchQuery("");
+		setShowTaskSearchError(false);
+		setIsTaskSearchFocused(false);
+	}
+
+	function handleTaskSearchShortcut(key: { name: string }) {
+		if (key.name !== "/" || isTaskSearchFocused()) {
+			return false;
+		}
+		setSuppressNextTaskSearchSlash(true);
+		focusTaskSearch();
+		return true;
+	}
+
+	function resolveRowAction(
+		taskKey: string,
+		depth: number
+	): "run" | "restart" {
+		const run = runByTaskKey().get(taskKey);
+		if (depth > 0) {
+			return run ? "restart" : "run";
+		}
+		if (!run) {
+			return "run";
+		}
+		const displayStatus = displayStatusByTaskKey().get(taskKey);
+		if (displayStatus === "Success" || displayStatus === "Failed") {
+			return "run";
+		}
+		return "restart";
+	}
+
+	async function runExactTaskSearchMatch(rowIndex: number) {
+		const row = taskRows()[rowIndex];
+		if (!row) {
+			return;
+		}
+		setSelectedIndex(rowIndex);
+		const action = resolveRowAction(row.key, row.depth);
+		if (action === "run") {
+			await runTaskByKey(row.key);
+			clearTaskSearch();
+			return;
+		}
+		const run = runByTaskKey().get(row.key);
+		if (run) {
+			await restartRunById(run.id);
+		} else {
+			await runTaskByKey(row.key);
+		}
+		clearTaskSearch();
+	}
+
+	function handleTaskSearchSubmit() {
+		const normalizedQuery = taskSearchQuery().trim().toLowerCase();
+		if (!normalizedQuery) {
+			setShowTaskSearchError(false);
+			return;
+		}
+		const rowIndex = taskRows().findIndex(
+			(row) =>
+				row.key.toLowerCase() === normalizedQuery ||
+				row.label.toLowerCase() === normalizedQuery
+		);
+		if (rowIndex < 0) {
+			setShowTaskSearchError(true);
+			return;
+		}
+		setShowTaskSearchError(false);
+		runExactTaskSearchMatch(rowIndex).catch(() => undefined);
+	}
+
+	function handleTaskSearchInputKeys(key: { name: string }) {
+		if (!isTaskSearchFocused()) {
+			return false;
+		}
+		if (key.name === "/") {
+			setSuppressNextTaskSearchSlash(true);
+			return true;
+		}
+		if (key.name === "escape") {
+			clearTaskSearch();
+			return true;
+		}
+		if (key.name === "enter" || key.name === "return") {
+			handleTaskSearchSubmit();
+			return true;
+		}
+		return false;
 	}
 
 	function handlePaneNavigation(key: { name: string }) {
@@ -313,6 +423,13 @@ function App() {
 		}
 		if (handleQuitKey(key)) {
 			renderer.destroy();
+			return;
+		}
+		if (handleTaskSearchShortcut(key)) {
+			return;
+		}
+		if (isTaskSearchFocused()) {
+			handleTaskSearchInputKeys(key);
 			return;
 		}
 		if (handlePaneNavigation(key)) {
@@ -426,7 +543,25 @@ function App() {
 				<box flexDirection="row" flexGrow={1}>
 					<TaskTreePanel
 						displayStatusByTaskKey={displayStatusByTaskKey()}
+						hasTaskSearchError={showTaskSearchError()}
+						isTaskSearchFocused={isTaskSearchFocused()}
+						onTaskSearchInput={(value) => {
+							let normalizedValue = value;
+							if (suppressNextTaskSearchSlash()) {
+								normalizedValue = normalizedValue.replace(
+									"/",
+									""
+								);
+								setSuppressNextTaskSearchSlash(false);
+							}
+							if (normalizedValue.startsWith("/")) {
+								normalizedValue = normalizedValue.slice(1);
+							}
+							setShowTaskSearchError(false);
+							setTaskSearchQuery(normalizedValue);
+						}}
 						selectedTaskKey={selectedRow()?.key ?? null}
+						taskSearchQuery={taskSearchQuery()}
 						taskTree={taskTree()}
 					/>
 					<RunDetailsPanel
