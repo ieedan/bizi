@@ -178,6 +178,8 @@ export interface components {
             runId: string;
         };
         Task: {
+            /** @description The color used for client-side log rendering for this task. */
+            color?: string | null;
             /** @description The command that the task will run. */
             command?: string | null;
             /** @description Any other task names that this task depends on. */

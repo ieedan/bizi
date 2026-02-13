@@ -9,6 +9,27 @@ export function formatTaskTagForLog(taskName: string, width: number): string {
     return `${prefix}${displayTaskName}${suffix}`.padEnd(safeWidth, " ");
 }
 
+const BASIC_TERMINAL_COLORS = new Set(["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]);
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+export function resolveTaskLogColor(color: string | null | undefined): string | undefined {
+    const trimmedColor = color?.trim();
+    if (!trimmedColor) {
+        return undefined;
+    }
+
+    const normalizedName = trimmedColor.toLowerCase();
+    if (BASIC_TERMINAL_COLORS.has(normalizedName)) {
+        return normalizedName;
+    }
+
+    if (HEX_COLOR_PATTERN.test(trimmedColor)) {
+        return trimmedColor.toLowerCase();
+    }
+
+    return undefined;
+}
+
 export function sanitizeLogForDisplay(line: string): string {
     const mostRecentSegment = line.split("\r").at(-1) ?? line;
     return mostRecentSegment

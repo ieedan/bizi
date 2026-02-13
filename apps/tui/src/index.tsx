@@ -23,6 +23,7 @@ import {
     flattenTaskRows,
     getDirectChildTaskKeys,
 } from "./lib/task-structure";
+import { resolveTaskLogColor } from "./lib/logs";
 import { buildDisplayStatusByTaskKey, canCancelRun, indexRunsByTaskKey, upsertRunTreeNode } from "./lib/task-runs";
 import type { LogMode } from "./types";
 
@@ -129,6 +130,16 @@ function App() {
     const logTaskTagWidth = createMemo(() => {
         const longestTaskName = logs().reduce((max, line) => Math.max(max, line.task.length), 0);
         return Math.min(40, Math.max(10, longestTaskName + 3));
+    });
+    const logColorByTaskKey = createMemo<Record<string, string>>(() => {
+        const map: Record<string, string> = {};
+        for (const [taskKey, task] of Object.entries(tasks())) {
+            const resolvedColor = resolveTaskLogColor(task.color);
+            if (resolvedColor) {
+                map[taskKey] = resolvedColor;
+            }
+        }
+        return map;
     });
 
     createEffect(() => {
@@ -354,6 +365,7 @@ function App() {
                         selectedTaskKey={selectedRow()?.key ?? null}
                         selectedCommand={selectedCommand()}
                         logs={logs()}
+                        logColorByTaskKey={logColorByTaskKey()}
                         logLineNumberWidth={logLineNumberWidth()}
                         logTaskTagWidth={logTaskTagWidth()}
                         isFocused={isLogViewFocused()}

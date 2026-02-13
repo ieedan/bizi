@@ -7,6 +7,7 @@ type RunDetailsPanelProps = {
     selectedTaskKey: string | null;
     selectedCommand: string | null;
     logs: TaskRunLogLine[];
+    logColorByTaskKey: Record<string, string>;
     logLineNumberWidth: number;
     logTaskTagWidth: number;
     isFocused: boolean;
@@ -56,7 +57,9 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
                                     </text>
                                 </box>
                                 <box width={props.logTaskTagWidth} flexShrink={0}>
-                                    <text>{formatTaskTagForLog(line.task, props.logTaskTagWidth)}</text>
+                                    <text fg={props.logColorByTaskKey[line.task]}>
+                                        {formatTaskTagForLog(line.task, props.logTaskTagWidth)}
+                                    </text>
                                 </box>
                                 <box flexGrow={1}>
                                     <text>{sanitizeLogForDisplay(line.line)}</text>
