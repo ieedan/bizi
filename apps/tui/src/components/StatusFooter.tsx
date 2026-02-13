@@ -21,7 +21,7 @@ export function StatusFooter(props: StatusFooterProps) {
             parts.push({ key: "c", label: "cancel" });
         }
         if (props.canToggleLogMode) {
-            parts.push({ key: "l", label: `logs: ${props.logMode}` });
+            parts.push({ key: "m", label: `logs: ${props.logMode}` });
         }
         parts.push({ key: "q", label: "quit" });
         return parts;

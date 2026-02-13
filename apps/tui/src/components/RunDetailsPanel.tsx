@@ -9,6 +9,7 @@ type RunDetailsPanelProps = {
     logs: TaskRunLogLine[];
     logLineNumberWidth: number;
     logTaskTagWidth: number;
+    isFocused: boolean;
 };
 
 export function RunDetailsPanel(props: RunDetailsPanelProps) {
@@ -17,7 +18,7 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
     return (
         <box
             border
-            borderColor="#666666"
+            borderColor={props.isFocused ? "#e6e6e6" : "#666666"}
             customBorderChars={{
                 topLeft: "┬",
                 topRight: "┐",
@@ -45,7 +46,7 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
                 <text>command: {props.selectedCommand ?? "(no command)"}</text>
             </box>
             <box flexGrow={1} marginTop={1}>
-                <scrollbox flexGrow={1} height="100%" stickyScroll stickyStart="bottom">
+                <scrollbox flexGrow={1} height="100%" focused={props.isFocused} stickyScroll stickyStart="bottom">
                     <For each={props.logs}>
                         {(line, idx) => (
                             <box flexDirection="row">

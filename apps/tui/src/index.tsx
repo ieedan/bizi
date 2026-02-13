@@ -39,6 +39,7 @@ function App() {
     const [selectedIndex, setSelectedIndex] = createSignal(0);
     const [logs, setLogs] = createSignal<TaskRunLogLine[]>([]);
     const [logMode, setLogMode] = createSignal<LogMode>("aggregate");
+    const [focusedPane, setFocusedPane] = createSignal<"tasks" | "logs">("tasks");
     const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
 
     const taskTree = createMemo(() => buildTaskTree(tasks()));
@@ -124,6 +125,7 @@ function App() {
         return canCancelRun(run);
     });
     const logLineNumberWidth = createMemo(() => Math.max(4, String(logs().length).length));
+    const isLogViewFocused = createMemo(() => focusedPane() === "logs");
     const logTaskTagWidth = createMemo(() => {
         const longestTaskName = logs().reduce((max, line) => Math.max(max, line.task.length), 0);
         return Math.min(40, Math.max(10, longestTaskName + 3));
@@ -201,28 +203,40 @@ function App() {
             return;
         }
 
+        if ((key.name === "right" || key.name === "l") && !isLogViewFocused()) {
+            setFocusedPane("logs");
+            return;
+        }
+        if ((key.name === "left" || key.name === "h") && isLogViewFocused()) {
+            setFocusedPane("tasks");
+            return;
+        }
+
         const rows = taskRows();
         if (rows.length === 0) {
             return;
         }
 
-        if (isJumpParentsBackwardShortcut(key, isMacOs)) {
+        if (!isLogViewFocused() && isJumpParentsBackwardShortcut(key, isMacOs)) {
             setSelectedIndex((idx) => findPreviousParentTaskIndex(taskRows(), idx));
             return;
         }
-        if (key.name === "up" || key.name === "k") {
+        if (isLogViewFocused() && (key.name === "up" || key.name === "k" || key.name === "down" || key.name === "j")) {
+            return;
+        }
+        if (!isLogViewFocused() && (key.name === "up" || key.name === "k")) {
             setSelectedIndex((idx) => Math.max(0, idx - 1));
             return;
         }
-        if (isJumpParentsForwardShortcut(key, isMacOs)) {
+        if (!isLogViewFocused() && isJumpParentsForwardShortcut(key, isMacOs)) {
             setSelectedIndex((idx) => findNextParentTaskIndex(taskRows(), idx));
             return;
         }
-        if (key.name === "down" || key.name === "j") {
+        if (!isLogViewFocused() && (key.name === "down" || key.name === "j")) {
             setSelectedIndex((idx) => Math.min(rows.length - 1, idx + 1));
             return;
         }
-        if (key.name === "l") {
+        if (key.name === "m") {
             if (!canToggleLogMode()) {
                 return;
             }
@@ -342,6 +356,7 @@ function App() {
                         logs={logs()}
                         logLineNumberWidth={logLineNumberWidth()}
                         logTaskTagWidth={logTaskTagWidth()}
+                        isFocused={isLogViewFocused()}
                     />
                 </box>
                 <StatusFooter
