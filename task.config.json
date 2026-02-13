@@ -1,37 +1,44 @@
 {
-    "$schema": "./schemas/task.config.json",
-    "tasks": {
-        "dev": {
-            "tasks": {
-                "server": {
-                    "cwd": "./services/server",
-                    "command": "cargo run -- --port 3000"
-                },
-                "generate": {
-                    "command": "bun tsx scripts/generate.ts"
-                },
-                "packages": {
-                    "command": "bun run --filter './packages/*' dev",
-                    "dependsOn": [
-                        "dev:generate"
-                    ]
-                }
-            }
-        },
-        "format": {
-            "command": "cargo fmt"
-        },
-        "lint": {
-            "command": "bun run --filter './packages/*' lint",
-            "dependsOn": [
-                "format"
-            ]
-        },
-        "check": {
-            "command": "bun run --filter './packages/*' check"
+  "$schema": "./schemas/task.config.json",
+  "tasks": {
+    "dev": {
+      "tasks": {
+        "server": {
+          "cwd": "./services/server",
+          "command": "cargo run -- --port 3000"
         },
         "generate": {
-            "command": "bun tsx scripts/generate.ts"
+          "command": "bun tsx scripts/generate.ts"
+        },
+        "packages": {
+          "command": "bun run --filter './packages/*' dev",
+          "dependsOn": ["dev:generate"]
         }
+      }
+    },
+    "format": {
+      "tasks": {
+        "ultracite": {
+          "command": "bun ultracite fix"
+        },
+        "cargo": {
+          "command": "cargo fmt"
+        }
+      }
+    },
+    "check": {
+      "dependsOn": ["format"],
+      "tasks": {
+        "ultracite": {
+          "command": "bun ultracite check"
+        },
+        "cargo": {
+          "command": "cargo check -p server"
+        }
+      }
+    },
+    "generate": {
+      "command": "bun tsx scripts/generate.ts"
     }
+  }
 }

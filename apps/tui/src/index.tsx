@@ -1,30 +1,41 @@
-import {
-    createTaskRunnerApi,
-    type Task,
-    type TaskRunLogLine,
-    type TaskRunLogsStreamMessage,
-    type TaskRunTreeNode,
-} from "@task-runner/client-js";
 import { render, useKeyboard, useRenderer } from "@opentui/solid";
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { RunDetailsPanel } from "./components/RunDetailsPanel";
-import { StatusFooter } from "./components/StatusFooter";
-import { TaskTreePanel } from "./components/TaskTreePanel";
+import {
+	createTaskRunnerApi,
+	type Task,
+	type TaskRunLogLine,
+	type TaskRunLogsStreamMessage,
+	type TaskRunTreeNode,
+} from "@task-runner/client-js";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	onCleanup,
+	onMount,
+} from "solid-js";
+import { RunDetailsPanel } from "./components/run-details-panel";
+import { StatusFooter } from "./components/status-footer";
+import { TaskTreePanel } from "./components/task-tree-panel";
 import { AppContextProvider } from "./lib/app-context";
 import { parseCliOptions } from "./lib/args";
 import {
-    isJumpParentsBackwardShortcut,
-    isJumpParentsForwardShortcut,
+	isJumpParentsBackwardShortcut,
+	isJumpParentsForwardShortcut,
 } from "./lib/keyboard-shortcuts";
-import {
-    buildTaskTree,
-    findNextParentTaskIndex,
-    findPreviousParentTaskIndex,
-    flattenTaskRows,
-    getDirectChildTaskKeys,
-} from "./lib/task-structure";
 import { resolveTaskLogColor } from "./lib/logs";
-import { buildDisplayStatusByTaskKey, canCancelRun, indexRunsByTaskKey, upsertRunTreeNode } from "./lib/task-runs";
+import {
+	buildDisplayStatusByTaskKey,
+	canCancelRun,
+	indexRunsByTaskKey,
+	upsertRunTreeNode,
+} from "./lib/task-runs";
+import {
+	buildTaskTree,
+	findNextParentTaskIndex,
+	findPreviousParentTaskIndex,
+	flattenTaskRows,
+	getDirectChildTaskKeys,
+} from "./lib/task-structure";
 import type { LogMode } from "./types";
 
 const api = createTaskRunnerApi({ port: 7436 });
@@ -33,358 +44,415 @@ const cwd = cliOptions.cwd;
 const isMacOs = process.platform === "darwin";
 
 function App() {
-    const renderer = useRenderer();
+	const renderer = useRenderer();
 
-    const [tasks, setTasks] = createSignal<Record<string, Task>>({});
-    const [taskRuns, setTaskRuns] = createSignal<TaskRunTreeNode[]>([]);
-    const [selectedIndex, setSelectedIndex] = createSignal(0);
-    const [logs, setLogs] = createSignal<TaskRunLogLine[]>([]);
-    const [logMode, setLogMode] = createSignal<LogMode>("aggregate");
-    const [focusedPane, setFocusedPane] = createSignal<"tasks" | "logs">("tasks");
-    const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
+	const [tasks, setTasks] = createSignal<Record<string, Task>>({});
+	const [taskRuns, setTaskRuns] = createSignal<TaskRunTreeNode[]>([]);
+	const [selectedIndex, setSelectedIndex] = createSignal(0);
+	const [logs, setLogs] = createSignal<TaskRunLogLine[]>([]);
+	const [logMode, setLogMode] = createSignal<LogMode>("aggregate");
+	const [focusedPane, setFocusedPane] = createSignal<"tasks" | "logs">(
+		"tasks"
+	);
+	const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
 
-    const taskTree = createMemo(() => buildTaskTree(tasks()));
-    const taskRows = createMemo(() => flattenTaskRows(taskTree()));
-    const runByTaskKey = createMemo(() => indexRunsByTaskKey(taskRuns()));
-    const displayStatusByTaskKey = createMemo(() => buildDisplayStatusByTaskKey(tasks(), runByTaskKey()));
-    const rootRunIdsKey = createMemo(() => taskRuns().map((run) => run.id).sort().join("|"));
-    const selectedRow = createMemo(() => taskRows()[selectedIndex()] ?? null);
-    const selectedRun = createMemo(() => {
-        const row = selectedRow();
-        if (!row) {
-            return undefined;
-        }
-        return runByTaskKey().get(row.key);
-    });
-    const selectedRunId = createMemo(() => selectedRun()?.id ?? null);
-    const selectedRunRevisionKey = createMemo(() => {
-        const run = selectedRun();
-        if (!run) {
-            return null;
-        }
-        return `${run.id}:${run.updatedAt}:${run.status}`;
-    });
-    const selectedDisplayStatus = createMemo(() => {
-        const row = selectedRow();
-        if (!row) {
-            return undefined;
-        }
-        return displayStatusByTaskKey().get(row.key);
-    });
-    const selectedWaitingOn = createMemo(() => selectedRun()?.waitingOn ?? null);
-    const selectedIsSubtask = createMemo(() => (selectedRow()?.depth ?? 0) > 0);
-    const hasTaskSelection = createMemo(() => selectedRow() !== null);
-    const canNavigateTasks = createMemo(() => taskRows().length > 0);
-    const canJumpParentTasks = createMemo(() => taskTree().length > 1);
-    const selectedRunAction = createMemo<"run" | "restart">(() => {
-        if (selectedIsSubtask()) {
-            return selectedRun() ? "restart" : "run";
-        }
+	const taskTree = createMemo(() => buildTaskTree(tasks()));
+	const taskRows = createMemo(() => flattenTaskRows(taskTree()));
+	const runByTaskKey = createMemo(() => indexRunsByTaskKey(taskRuns()));
+	const displayStatusByTaskKey = createMemo(() =>
+		buildDisplayStatusByTaskKey(tasks(), runByTaskKey())
+	);
+	const rootRunIdsKey = createMemo(() =>
+		taskRuns()
+			.map((run) => run.id)
+			.sort()
+			.join("|")
+	);
+	const selectedRow = createMemo(() => taskRows()[selectedIndex()] ?? null);
+	const selectedRun = createMemo(() => {
+		const row = selectedRow();
+		if (!row) {
+			return undefined;
+		}
+		return runByTaskKey().get(row.key);
+	});
+	const selectedRunId = createMemo(() => selectedRun()?.id ?? null);
+	const selectedRunRevisionKey = createMemo(() => {
+		const run = selectedRun();
+		if (!run) {
+			return null;
+		}
+		return `${run.id}:${run.updatedAt}:${run.status}`;
+	});
+	const selectedDisplayStatus = createMemo(() => {
+		const row = selectedRow();
+		if (!row) {
+			return undefined;
+		}
+		return displayStatusByTaskKey().get(row.key);
+	});
+	const selectedWaitingOn = createMemo(
+		() => selectedRun()?.waitingOn ?? null
+	);
+	const selectedIsSubtask = createMemo(() => (selectedRow()?.depth ?? 0) > 0);
+	const hasTaskSelection = createMemo(() => selectedRow() !== null);
+	const canNavigateTasks = createMemo(() => taskRows().length > 0);
+	const canJumpParentTasks = createMemo(() => taskTree().length > 1);
+	const selectedRunAction = createMemo<"run" | "restart">(() => {
+		if (selectedIsSubtask()) {
+			return selectedRun() ? "restart" : "run";
+		}
 
-        const run = selectedRun();
-        if (!run) {
-            return "run";
-        }
+		const run = selectedRun();
+		if (!run) {
+			return "run";
+		}
 
-        const displayStatus = selectedDisplayStatus();
-        if (displayStatus === "Success" || displayStatus === "Failed") {
-            return "run";
-        }
+		const displayStatus = selectedDisplayStatus();
+		if (displayStatus === "Success" || displayStatus === "Failed") {
+			return "run";
+		}
 
-        return "restart";
-    });
+		return "restart";
+	});
 
-    const selectedCommand = createMemo(() => {
-        const row = selectedRow();
-        if (!row) {
-            return null;
-        }
-        return tasks()[row.key]?.command ?? null;
-    });
-    const selectedHasChildren = createMemo(() => {
-        const row = selectedRow();
-        if (!row) {
-            return false;
-        }
-        return getDirectChildTaskKeys(tasks(), row.key).length > 0;
-    });
-    const selectedHasCommand = createMemo(() => selectedCommand() !== null);
-    const canToggleLogMode = createMemo(() => selectedHasChildren() && selectedHasCommand());
-    const selectedUsesAggregateLogs = createMemo(() => {
-        if (!selectedHasChildren()) {
-            return false;
-        }
-        if (!selectedHasCommand()) {
-            return true;
-        }
-        return logMode() === "aggregate";
-    });
-    const canCancelSelected = createMemo(() => {
-        const run = selectedRun();
-        if (!run) {
-            return false;
-        }
-        return canCancelRun(run);
-    });
-    const isLogViewFocused = createMemo(() => focusedPane() === "logs");
-    const logTaskTagWidth = createMemo(() => {
-        const longestTaskName = logs().reduce((max, line) => Math.max(max, line.task.length), 0);
-        return Math.min(40, Math.max(10, longestTaskName + 3));
-    });
-    const logColorByTaskKey = createMemo<Record<string, string>>(() => {
-        const map: Record<string, string> = {};
-        for (const [taskKey, task] of Object.entries(tasks())) {
-            const resolvedColor = resolveTaskLogColor(task.color);
-            if (resolvedColor) {
-                map[taskKey] = resolvedColor;
-            }
-        }
-        return map;
-    });
+	const selectedCommand = createMemo(() => {
+		const row = selectedRow();
+		if (!row) {
+			return null;
+		}
+		return tasks()[row.key]?.command ?? null;
+	});
+	const selectedHasChildren = createMemo(() => {
+		const row = selectedRow();
+		if (!row) {
+			return false;
+		}
+		return getDirectChildTaskKeys(tasks(), row.key).length > 0;
+	});
+	const selectedHasCommand = createMemo(() => selectedCommand() !== null);
+	const canToggleLogMode = createMemo(
+		() => selectedHasChildren() && selectedHasCommand()
+	);
+	const selectedUsesAggregateLogs = createMemo(() => {
+		if (!selectedHasChildren()) {
+			return false;
+		}
+		if (!selectedHasCommand()) {
+			return true;
+		}
+		return logMode() === "aggregate";
+	});
+	const canCancelSelected = createMemo(() => {
+		const run = selectedRun();
+		if (!run) {
+			return false;
+		}
+		return canCancelRun(run);
+	});
+	const isLogViewFocused = createMemo(() => focusedPane() === "logs");
+	const logTaskTagWidth = createMemo(() => {
+		const longestTaskName = logs().reduce(
+			(max, line) => Math.max(max, line.task.length),
+			0
+		);
+		return Math.min(40, Math.max(10, longestTaskName + 3));
+	});
+	const logColorByTaskKey = createMemo<Record<string, string>>(() => {
+		const map: Record<string, string> = {};
+		for (const [taskKey, task] of Object.entries(tasks())) {
+			const resolvedColor = resolveTaskLogColor(task.color);
+			if (resolvedColor) {
+				map[taskKey] = resolvedColor;
+			}
+		}
+		return map;
+	});
 
-    createEffect(() => {
-        const rows = taskRows();
-        if (rows.length === 0) {
-            setSelectedIndex(0);
-            return;
-        }
-        if (selectedIndex() >= rows.length) {
-            setSelectedIndex(rows.length - 1);
-        }
-    });
+	createEffect(() => {
+		const rows = taskRows();
+		if (rows.length === 0) {
+			setSelectedIndex(0);
+			return;
+		}
+		if (selectedIndex() >= rows.length) {
+			setSelectedIndex(rows.length - 1);
+		}
+	});
 
-    async function refreshTasks() {
-        const { data, error } = await api.listTasks(cwd);
-        if (error || !data || !("tasks" in data)) {
-            setErrorMessage("failed to load tasks");
-            return;
-        }
-        setErrorMessage(null);
-        setTasks(data.tasks);
-    }
+	async function refreshTasks() {
+		const { data, error } = await api.listTasks(cwd);
+		if (error || !data || !("tasks" in data)) {
+			setErrorMessage("failed to load tasks");
+			return;
+		}
+		setErrorMessage(null);
+		setTasks(data.tasks);
+	}
 
-    async function refreshRuns() {
-        const { data, error } = await api.listTaskRuns(cwd);
-        if (error || !data || !("taskRuns" in data)) {
-            setErrorMessage("failed to load task runs");
-            return;
-        }
-        setErrorMessage(null);
-        setTaskRuns(data.taskRuns);
-    }
+	async function refreshRuns() {
+		const { data, error } = await api.listTaskRuns(cwd);
+		if (error || !data || !("taskRuns" in data)) {
+			setErrorMessage("failed to load task runs");
+			return;
+		}
+		setErrorMessage(null);
+		setTaskRuns(data.taskRuns);
+	}
 
-    async function runSelectedTask() {
-        const row = selectedRow();
-        if (!row) {
-            return;
-        }
-        await api.runTask(row.key, cwd);
-        await refreshRuns();
-    }
+	async function runSelectedTask() {
+		const row = selectedRow();
+		if (!row) {
+			return;
+		}
+		await api.runTask(row.key, cwd);
+		await refreshRuns();
+	}
 
-    async function restartSelectedRun() {
-        const run = selectedRun();
-        if (!run) {
-            return;
-        }
-        setLogs([]);
-        await api.restartTask(run.id);
-        await refreshRuns();
-    }
+	async function restartSelectedRun() {
+		const run = selectedRun();
+		if (!run) {
+			return;
+		}
+		setLogs([]);
+		await api.restartTask(run.id);
+		await refreshRuns();
+	}
 
-    async function cancelSelectedRun() {
-        const run = selectedRun();
-        if (!run) {
-            return;
-        }
-        if (!canCancelRun(run)) {
-            return;
-        }
-        await api.cancelTask(run.id);
-        await refreshRuns();
-    }
+	async function cancelSelectedRun() {
+		const run = selectedRun();
+		if (!run) {
+			return;
+		}
+		if (!canCancelRun(run)) {
+			return;
+		}
+		await api.cancelTask(run.id);
+		await refreshRuns();
+	}
 
-    useKeyboard((key) => {
-        if (key.eventType !== "press") {
-            return;
-        }
+	function handleQuitKey(key: { name: string; ctrl?: boolean }) {
+		return key.name === "q" || (key.ctrl && key.name === "c");
+	}
 
-        if (key.name === "q" || (key.ctrl && key.name === "c")) {
-            renderer.destroy();
-            return;
-        }
+	function handlePaneNavigation(key: { name: string }) {
+		if ((key.name === "right" || key.name === "l") && !isLogViewFocused()) {
+			setFocusedPane("logs");
+			return true;
+		}
+		if ((key.name === "left" || key.name === "h") && isLogViewFocused()) {
+			setFocusedPane("tasks");
+			return true;
+		}
+		return false;
+	}
 
-        if ((key.name === "right" || key.name === "l") && !isLogViewFocused()) {
-            setFocusedPane("logs");
-            return;
-        }
-        if ((key.name === "left" || key.name === "h") && isLogViewFocused()) {
-            setFocusedPane("tasks");
-            return;
-        }
+	function handleTaskNavigation(key: {
+		name: string;
+		ctrl?: boolean;
+		option?: boolean;
+	}) {
+		const rows = taskRows();
+		if (rows.length === 0) {
+			return false;
+		}
+		if (isLogViewFocused() && ["up", "k", "down", "j"].includes(key.name)) {
+			return true;
+		}
+		if (
+			!isLogViewFocused() &&
+			isJumpParentsBackwardShortcut(key, isMacOs)
+		) {
+			setSelectedIndex((idx) =>
+				findPreviousParentTaskIndex(taskRows(), idx)
+			);
+			return true;
+		}
+		if (!isLogViewFocused() && (key.name === "up" || key.name === "k")) {
+			setSelectedIndex((idx) => Math.max(0, idx - 1));
+			return true;
+		}
+		if (!isLogViewFocused() && isJumpParentsForwardShortcut(key, isMacOs)) {
+			setSelectedIndex((idx) => findNextParentTaskIndex(taskRows(), idx));
+			return true;
+		}
+		if (!isLogViewFocused() && (key.name === "down" || key.name === "j")) {
+			setSelectedIndex((idx) => Math.min(rows.length - 1, idx + 1));
+			return true;
+		}
+		return false;
+	}
 
-        const rows = taskRows();
-        if (rows.length === 0) {
-            return;
-        }
+	function handleActionKeys(key: { name: string }) {
+		if (key.name === "m") {
+			if (canToggleLogMode()) {
+				setLogMode((mode) =>
+					mode === "aggregate" ? "selected" : "aggregate"
+				);
+			}
+			return true;
+		}
+		if (key.name === "r") {
+			if (selectedRunAction() === "restart") {
+				restartSelectedRun().catch(() => undefined);
+			} else {
+				runSelectedTask().catch(() => undefined);
+			}
+			return true;
+		}
+		if (key.name === "c") {
+			cancelSelectedRun().catch(() => undefined);
+			return true;
+		}
+		return false;
+	}
 
-        if (!isLogViewFocused() && isJumpParentsBackwardShortcut(key, isMacOs)) {
-            setSelectedIndex((idx) => findPreviousParentTaskIndex(taskRows(), idx));
-            return;
-        }
-        if (isLogViewFocused() && (key.name === "up" || key.name === "k" || key.name === "down" || key.name === "j")) {
-            return;
-        }
-        if (!isLogViewFocused() && (key.name === "up" || key.name === "k")) {
-            setSelectedIndex((idx) => Math.max(0, idx - 1));
-            return;
-        }
-        if (!isLogViewFocused() && isJumpParentsForwardShortcut(key, isMacOs)) {
-            setSelectedIndex((idx) => findNextParentTaskIndex(taskRows(), idx));
-            return;
-        }
-        if (!isLogViewFocused() && (key.name === "down" || key.name === "j")) {
-            setSelectedIndex((idx) => Math.min(rows.length - 1, idx + 1));
-            return;
-        }
-        if (key.name === "m") {
-            if (!canToggleLogMode()) {
-                return;
-            }
-            setLogMode((mode) => (mode === "aggregate" ? "selected" : "aggregate"));
-            return;
-        }
-        if (key.name === "r") {
-            if (selectedRunAction() === "restart") {
-                void restartSelectedRun();
-                return;
-            }
-            void runSelectedTask();
-            return;
-        }
-        if (key.name === "c") {
-            void cancelSelectedRun();
-        }
-    });
+	useKeyboard((key) => {
+		if (key.eventType !== "press") {
+			return;
+		}
+		if (handleQuitKey(key)) {
+			renderer.destroy();
+			return;
+		}
+		if (handlePaneNavigation(key)) {
+			return;
+		}
+		if (taskRows().length === 0) {
+			return;
+		}
+		if (handleTaskNavigation(key)) {
+			return;
+		}
+		handleActionKeys(key);
+	});
 
-    onMount(() => {
-        void refreshTasks();
-        void refreshRuns();
-        const interval = setInterval(() => {
-            void refreshRuns();
-        }, 1200);
-        onCleanup(() => clearInterval(interval));
-    });
+	onMount(() => {
+		refreshTasks().catch(() => undefined);
+		refreshRuns().catch(() => undefined);
+		const interval = setInterval(() => {
+			refreshRuns().catch(() => undefined);
+		}, 1200);
+		onCleanup(() => clearInterval(interval));
+	});
 
-    createEffect(() => {
-        const runIdsKey = rootRunIdsKey();
-        if (!runIdsKey) {
-            return;
-        }
-        const runIds = runIdsKey.split("|").filter(Boolean);
+	createEffect(() => {
+		const runIdsKey = rootRunIdsKey();
+		if (!runIdsKey) {
+			return;
+		}
+		const runIds = runIdsKey.split("|").filter(Boolean);
 
-        const sockets = runIds.map((runId) =>
-            api.subscribeTaskRun(runId, {
-                onMessage: (payload) => {
-                    if (!("taskRun" in payload)) {
-                        return;
-                    }
-                    setTaskRuns((current) => upsertRunTreeNode(current, payload.taskRun));
-                },
-            }),
-        );
+		const sockets = runIds.map((runId) =>
+			api.subscribeTaskRun(runId, {
+				onMessage: (payload) => {
+					if (!("taskRun" in payload)) {
+						return;
+					}
+					setTaskRuns((current) =>
+						upsertRunTreeNode(current, payload.taskRun)
+					);
+				},
+			})
+		);
 
-        onCleanup(() => {
-            for (const socket of sockets) {
-                socket.close();
-            }
-        });
-    });
+		onCleanup(() => {
+			for (const socket of sockets) {
+				socket.close();
+			}
+		});
+	});
 
-    createEffect(() => {
-        const row = selectedRow();
-        const runId = selectedRunId();
-        selectedRunRevisionKey();
-        const includeChildren = selectedUsesAggregateLogs();
-        if (!row || !runId) {
-            setLogs([]);
-            return;
-        }
+	createEffect(() => {
+		const row = selectedRow();
+		const runId = selectedRunId();
+		selectedRunRevisionKey();
+		const includeChildren = selectedUsesAggregateLogs();
+		if (!(row && runId)) {
+			setLogs([]);
+			return;
+		}
 
-        let closed = false;
+		let closed = false;
 
-        const logsSocket = api.subscribeTaskLogs(
-            runId,
-            {
-                onMessage: (payload: TaskRunLogsStreamMessage) => {
-                    if (closed) {
-                        return;
-                    }
-                    if (payload.type === "snapshot") {
-                        setLogs(payload.logs);
-                        return;
-                    }
-                    if (payload.type === "log") {
-                        setLogs((prev) => [...prev, payload.log]);
-                        return;
-                    }
-                    setErrorMessage(payload.message);
-                },
-                onError: () => {},
-                onClose: () => {},
-            },
-            { includeChildren },
-        );
+		const logsSocket = api.subscribeTaskLogs(
+			runId,
+			{
+				onMessage: (payload: TaskRunLogsStreamMessage) => {
+					if (closed) {
+						return;
+					}
+					if (payload.type === "snapshot") {
+						setLogs(payload.logs);
+						return;
+					}
+					if (payload.type === "log") {
+						setLogs((prev) => [...prev, payload.log]);
+						return;
+					}
+					setErrorMessage(payload.message);
+				},
+				onError: () => {
+					/* intentional no-op */
+				},
+				onClose: () => {
+					/* intentional no-op */
+				},
+			},
+			{ includeChildren }
+		);
 
-        const runSocket = api.subscribeTaskRun(runId, {
-            onMessage: () => {
-                if (!closed) {
-                    void refreshRuns();
-                }
-            },
-            onError: () => {},
-        });
+		const runSocket = api.subscribeTaskRun(runId, {
+			onMessage: () => {
+				if (!closed) {
+					refreshRuns().catch(() => undefined);
+				}
+			},
+			onError: () => {
+				/* intentional no-op */
+			},
+		});
 
-        onCleanup(() => {
-            closed = true;
-            logsSocket.close();
-            runSocket.close();
-        });
-    });
+		onCleanup(() => {
+			closed = true;
+			logsSocket.close();
+			runSocket.close();
+		});
+	});
 
-    return (
-        <AppContextProvider isMacOs={isMacOs} cliOptions={cliOptions}>
-            <box flexDirection="column" height="100%" width="100%">
-                <box flexDirection="row" flexGrow={1}>
-                    <TaskTreePanel
-                        taskTree={taskTree()}
-                        selectedTaskKey={selectedRow()?.key ?? null}
-                        displayStatusByTaskKey={displayStatusByTaskKey()}
-                    />
-                    <RunDetailsPanel
-                        selectedStatus={selectedDisplayStatus() ?? null}
-                        selectedRunStatus={selectedRun()?.status ?? null}
-                        selectedRunUpdatedAt={selectedRun()?.updatedAt ?? null}
-                        waitingOn={selectedWaitingOn()}
-                        logs={logs()}
-                        logColorByTaskKey={logColorByTaskKey()}
-                        logTaskTagWidth={logTaskTagWidth()}
-                        isFocused={isLogViewFocused()}
-                    />
-                </box>
-                <StatusFooter
-                    errorMessage={errorMessage()}
-                    canNavigateTasks={canNavigateTasks()}
-                    canJumpParentTasks={canJumpParentTasks()}
-                    canRunOrRestart={hasTaskSelection()}
-                    runAction={selectedRunAction()}
-                    canCancel={canCancelSelected()}
-                    canToggleLogMode={canToggleLogMode()}
-                    logMode={logMode()}
-                />
-            </box>
-        </AppContextProvider>
-    );
+	return (
+		<AppContextProvider cliOptions={cliOptions} isMacOs={isMacOs}>
+			<box flexDirection="column" height="100%" width="100%">
+				<box flexDirection="row" flexGrow={1}>
+					<TaskTreePanel
+						displayStatusByTaskKey={displayStatusByTaskKey()}
+						selectedTaskKey={selectedRow()?.key ?? null}
+						taskTree={taskTree()}
+					/>
+					<RunDetailsPanel
+						isFocused={isLogViewFocused()}
+						logColorByTaskKey={logColorByTaskKey()}
+						logs={logs()}
+						logTaskTagWidth={logTaskTagWidth()}
+						selectedRunStatus={selectedRun()?.status ?? null}
+						selectedRunUpdatedAt={selectedRun()?.updatedAt ?? null}
+						selectedStatus={selectedDisplayStatus() ?? null}
+						waitingOn={selectedWaitingOn()}
+					/>
+				</box>
+				<StatusFooter
+					canCancel={canCancelSelected()}
+					canJumpParentTasks={canJumpParentTasks()}
+					canNavigateTasks={canNavigateTasks()}
+					canRunOrRestart={hasTaskSelection()}
+					canToggleLogMode={canToggleLogMode()}
+					errorMessage={errorMessage()}
+					logMode={logMode()}
+					runAction={selectedRunAction()}
+				/>
+			</box>
+		</AppContextProvider>
+	);
 }
 
 render(() => <App />);

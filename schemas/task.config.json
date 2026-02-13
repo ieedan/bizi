@@ -1,79 +1,78 @@
 {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://PLACEHOLDER.com/schemas/task.config.json",
-    "description": "Define tasks",
-    "$defs": {
-        "task": {
-            "type": "object",
-            "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "The title of the task"
-                },
-                "color": {
-                    "description": "The color used for client-side log rendering for this task",
-                    "oneOf": [
-                        {
-                            "type": "string",
-                            "enum": [
-                                "black",
-                                "red",
-                                "green",
-                                "yellow",
-                                "blue",
-                                "magenta",
-                                "cyan",
-                                "white"
-                            ]
-                        },
-                        {
-                            "type": "string",
-                            "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
-                        }
-                    ]
-                },
-                "cwd": {
-                    "type": "string",
-                    "description": "The current working directory to run the task in"
-                },
-                "command": {
-                    "type": "string",
-                    "description": "The command that the task will run"
-                },
-                "dependsOn": {
-                    "type": "array",
-                    "description": "Any other task names that this task depends on",
-                    "items": {
-                        "type": "string",
-                        "description": "The name of a task that this task depends on"
-                    },
-                    "uniqueItems": true
-                },
-                "optional": {
-                    "type": "boolean",
-                    "description": "Whether the task is optional. If true, the task will only run if started manually.",
-                    "default": false
-                },
-                "tasks": {
-                    "type": "object",
-                    "description": "Subtasks of this task. Keys must be unique task names.",
-                    "additionalProperties": {
-                        "$ref": "#/$defs/task"
-                    }
-                }
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://PLACEHOLDER.com/schemas/task.config.json",
+  "description": "Define tasks",
+  "$defs": {
+    "task": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the task"
+        },
+        "color": {
+          "description": "The color used for client-side log rendering for this task",
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "black",
+                "red",
+                "green",
+                "yellow",
+                "blue",
+                "magenta",
+                "cyan",
+                "white"
+              ]
             },
-            "required": []
-        }
-    },
-    "type": "object",
-    "properties": {
-        "tasks": {
-            "type": "object",
-            "description": "A map of task names to task definitions. Keys must be unique task names.",
-            "additionalProperties": {
-                "$ref": "#/$defs/task"
+            {
+              "type": "string",
+              "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
             }
+          ]
+        },
+        "cwd": {
+          "type": "string",
+          "description": "The current working directory to run the task in"
+        },
+        "command": {
+          "type": "string",
+          "description": "The command that the task will run"
+        },
+        "dependsOn": {
+          "type": "array",
+          "description": "Any other task names that this task depends on",
+          "items": {
+            "type": "string",
+            "description": "The name of a task that this task depends on"
+          },
+          "uniqueItems": true
+        },
+        "optional": {
+          "type": "boolean",
+          "description": "Whether the task is optional. If true, the task will only run if started manually.",
+          "default": false
+        },
+        "tasks": {
+          "type": "object",
+          "description": "Subtasks of this task. Keys must be unique task names.",
+          "additionalProperties": {
+            "$ref": "#/$defs/task"
+          }
         }
+      },
+      "required": []
     }
+  },
+  "type": "object",
+  "properties": {
+    "tasks": {
+      "type": "object",
+      "description": "A map of task names to task definitions. Keys must be unique task names.",
+      "additionalProperties": {
+        "$ref": "#/$defs/task"
+      }
+    }
+  }
 }
-
