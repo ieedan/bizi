@@ -10,6 +10,7 @@ import { createEffect, createMemo, createSignal, onCleanup, onMount } from "soli
 import { RunDetailsPanel } from "./components/RunDetailsPanel";
 import { StatusFooter } from "./components/StatusFooter";
 import { TaskTreePanel } from "./components/TaskTreePanel";
+import { AppContextProvider } from "./lib/app-context";
 import { parseCwdArg } from "./lib/args";
 import {
     isJumpParentsBackwardShortcut,
@@ -294,24 +295,26 @@ function App() {
     });
 
     return (
-        <box flexDirection="column" height="100%" width="100%">
-            <box flexDirection="row" flexGrow={1}>
-                <TaskTreePanel
-                    taskTree={taskTree()}
-                    selectedTaskKey={selectedRow()?.key ?? null}
-                    displayStatusByTaskKey={displayStatusByTaskKey()}
-                />
-                <RunDetailsPanel
-                    cwd={cwd}
-                    selectedTaskKey={selectedRow()?.key ?? null}
-                    selectedCommand={selectedCommand()}
-                    logs={logs()}
-                    logLineNumberWidth={logLineNumberWidth()}
-                    logTaskTagWidth={logTaskTagWidth()}
-                />
+        <AppContextProvider isMacOs={isMacOs}>
+            <box flexDirection="column" height="100%" width="100%">
+                <box flexDirection="row" flexGrow={1}>
+                    <TaskTreePanel
+                        taskTree={taskTree()}
+                        selectedTaskKey={selectedRow()?.key ?? null}
+                        displayStatusByTaskKey={displayStatusByTaskKey()}
+                    />
+                    <RunDetailsPanel
+                        cwd={cwd}
+                        selectedTaskKey={selectedRow()?.key ?? null}
+                        selectedCommand={selectedCommand()}
+                        logs={logs()}
+                        logLineNumberWidth={logLineNumberWidth()}
+                        logTaskTagWidth={logTaskTagWidth()}
+                    />
+                </box>
+                <StatusFooter errorMessage={errorMessage()} />
             </box>
-            <StatusFooter isMacOs={isMacOs} errorMessage={errorMessage()} />
-        </box>
+        </AppContextProvider>
     );
 }
 

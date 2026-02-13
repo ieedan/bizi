@@ -1,14 +1,17 @@
+import { useAppContext } from "../lib/app-context";
+
 type StatusFooterProps = {
-    isMacOs: boolean;
     errorMessage: string | null;
 };
 
 export function StatusFooter(props: StatusFooterProps) {
+    const { isMacOs } = useAppContext();
+
     return (
         <box border={["left", "right", "bottom"]} borderColor="#666666" paddingLeft={1}>
             <text>
                 arrows/jk move | jump parents:{" "}
-                {props.isMacOs ? "option+up/down or option+k/j" : "ctrl+up/down or ctrl+k/j"} | r
+                {isMacOs ? "option+up/down or option+k/j" : "ctrl+up/down or ctrl+k/j"} | r
                 run/restart (auto) | c cancel | l log mode | q quit
                 {props.errorMessage ? ` | error: ${props.errorMessage}` : ""}
             </text>
