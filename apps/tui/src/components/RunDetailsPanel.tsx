@@ -1,5 +1,5 @@
 import type { TaskRunLogLine } from "@task-runner/client-js";
-import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { useAppContext } from "../lib/app-context";
 import { formatElapsedDuration, formatLogTimestamp, formatTaskTagForLog, sanitizeLogForDisplay } from "../lib/logs";
 
@@ -153,11 +153,14 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
                     cross: "┼",
                 }}
             >
-                <box flexDirection="row" justifyContent="space-between" width="100%" paddingLeft={1} paddingRight={1}>
-                    <box flexDirection="row">
-                        <text fg={statusIndicator().color}>{statusIndicator().icon}</text>
-                        <text> {footerStatusText()}</text>
-                    </box>
+                <box flexDirection="row" width="100%" paddingLeft={1} paddingRight={1}>
+                    <Show when={props.selectedStatus !== "Indeterminate"}>
+                        <box flexDirection="row">
+                            <text fg={statusIndicator().color}>{statusIndicator().icon}</text>
+                            <text> {footerStatusText()}</text>
+                        </box>
+                    </Show>
+                    <box flexGrow={1} />
                     <text>
                         <span style={{ fg: "#666666" }}>{cliOptions.cwd}</span>
                     </text>
