@@ -21,6 +21,7 @@ import {
     findNextParentTaskIndex,
     findPreviousParentTaskIndex,
     flattenTaskRows,
+    getDirectChildTaskKeys,
 } from "./lib/task-structure";
 import { buildDisplayStatusByTaskKey, canCancelRun, indexRunsByTaskKey, upsertRunTreeNode } from "./lib/task-runs";
 import type { LogMode } from "./types";
@@ -69,6 +70,9 @@ function App() {
         return displayStatusByTaskKey().get(row.key);
     });
     const selectedIsSubtask = createMemo(() => (selectedRow()?.depth ?? 0) > 0);
+    const hasTaskSelection = createMemo(() => selectedRow() !== null);
+    const canNavigateTasks = createMemo(() => taskRows().length > 0);
+    const canJumpParentTasks = createMemo(() => taskTree().length > 1);
     const selectedRunAction = createMemo<"run" | "restart">(() => {
         if (selectedIsSubtask()) {
             return selectedRun() ? "restart" : "run";
@@ -94,6 +98,21 @@ function App() {
         }
         return tasks()[row.key]?.command ?? null;
     });
+    const selectedHasChildren = createMemo(() => {
+        const row = selectedRow();
+        if (!row) {
+            return false;
+        }
+        return getDirectChildTaskKeys(tasks(), row.key).length > 0;
+    });
+    const canToggleLogMode = createMemo(() => selectedHasChildren() && selectedCommand() !== null);
+    const canCancelSelected = createMemo(() => {
+        const run = selectedRun();
+        if (!run) {
+            return false;
+        }
+        return canCancelRun(run);
+    });
     const logLineNumberWidth = createMemo(() => Math.max(4, String(logs().length).length));
     const logTaskTagWidth = createMemo(() => {
         const longestTaskName = logs().reduce((max, line) => Math.max(max, line.task.length), 0);
@@ -108,6 +127,12 @@ function App() {
         }
         if (selectedIndex() >= rows.length) {
             setSelectedIndex(rows.length - 1);
+        }
+    });
+
+    createEffect(() => {
+        if (!canToggleLogMode() && logMode() === "aggregate") {
+            setLogMode("selected");
         }
     });
 
@@ -194,6 +219,9 @@ function App() {
             return;
         }
         if (key.name === "l") {
+            if (!canToggleLogMode()) {
+                return;
+            }
             setLogMode((mode) => (mode === "aggregate" ? "selected" : "aggregate"));
             return;
         }
@@ -248,7 +276,7 @@ function App() {
         const row = selectedRow();
         const runId = selectedRunId();
         selectedRunRevisionKey();
-        const includeChildren = logMode() === "aggregate";
+        const includeChildren = canToggleLogMode() && logMode() === "aggregate";
         if (!row || !runId) {
             setLogs([]);
             return;
@@ -312,7 +340,15 @@ function App() {
                         logTaskTagWidth={logTaskTagWidth()}
                     />
                 </box>
-                <StatusFooter errorMessage={errorMessage()} />
+                <StatusFooter
+                    errorMessage={errorMessage()}
+                    canNavigateTasks={canNavigateTasks()}
+                    canJumpParentTasks={canJumpParentTasks()}
+                    canRunOrRestart={hasTaskSelection()}
+                    runAction={selectedRunAction()}
+                    canCancel={canCancelSelected()}
+                    canToggleLogMode={canToggleLogMode()}
+                />
             </box>
         </AppContextProvider>
     );
