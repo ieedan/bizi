@@ -111,7 +111,7 @@ function App() {
         }
     });
 
-    const refreshTasks = async () => {
+    async function refreshTasks() {
         const { data, error } = await api.listTasks(cwd);
         if (error || !data || !("tasks" in data)) {
             setErrorMessage("failed to load tasks");
@@ -119,9 +119,9 @@ function App() {
         }
         setErrorMessage(null);
         setTasks(data.tasks);
-    };
+    }
 
-    const refreshRuns = async () => {
+    async function refreshRuns() {
         const { data, error } = await api.listTaskRuns(cwd);
         if (error || !data || !("taskRuns" in data)) {
             setErrorMessage("failed to load task runs");
@@ -129,18 +129,18 @@ function App() {
         }
         setErrorMessage(null);
         setTaskRuns(data.taskRuns);
-    };
+    }
 
-    const runSelectedTask = async () => {
+    async function runSelectedTask() {
         const row = selectedRow();
         if (!row) {
             return;
         }
         await api.runTask(row.key, cwd);
         await refreshRuns();
-    };
+    }
 
-    const restartSelectedRun = async () => {
+    async function restartSelectedRun() {
         const run = selectedRun();
         if (!run) {
             return;
@@ -148,9 +148,9 @@ function App() {
         setLogs([]);
         await api.restartTask(run.id);
         await refreshRuns();
-    };
+    }
 
-    const cancelSelectedRun = async () => {
+    async function cancelSelectedRun() {
         const run = selectedRun();
         if (!run) {
             return;
@@ -160,7 +160,7 @@ function App() {
         }
         await api.cancelTask(run.id);
         await refreshRuns();
-    };
+    }
 
     useKeyboard((key) => {
         if (key.eventType !== "press") {
