@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch src/index.tsx"
+    "dev": "bun run src/index.tsx"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -13,6 +13,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@task-runner/client-js": "workspace:*",
     "@babel/core": "^7.29.0",
     "@babel/preset-typescript": "^7.28.5",
     "@opentui/core": "^0.1.79",

@@ -19,17 +19,7 @@
             }
         },
         "format": {
-            "command": "cargo fmt",
-            "tasks": {
-                "lint": {
-                    "command": "bun run --filter './packages/*' lint",
-                    "tasks": {
-                        "check": {
-                            "command": "bun run --filter './packages/*' check"
-                        }
-                    }
-                }
-            }
+            "command": "cargo fmt"
         },
         "lint": {
             "command": "bun run --filter './packages/*' lint",

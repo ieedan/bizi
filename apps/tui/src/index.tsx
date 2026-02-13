@@ -4,7 +4,7 @@ import {
     type TaskRunLogLine,
     type TaskRunLogsStreamMessage,
     type TaskRunTreeNode,
-} from "../../../packages/client-js/src/index";
+} from "@task-runner/client-js";
 import { render, useKeyboard, useRenderer } from "@opentui/solid";
 import { For, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 
