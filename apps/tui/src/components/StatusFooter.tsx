@@ -1,5 +1,4 @@
 import { For } from "solid-js";
-import { useAppContext } from "../lib/app-context";
 
 type StatusFooterProps = {
     errorMessage: string | null;
@@ -9,10 +8,11 @@ type StatusFooterProps = {
     runAction: "run" | "restart";
     canCancel: boolean;
     canToggleLogMode: boolean;
+    logMode: "aggregate" | "selected";
 };
 
 export function StatusFooter(props: StatusFooterProps) {
-    const actions = () => {
+    function actions() {
         const parts: Array<{ key: string; label: string }> = [];
         if (props.canRunOrRestart) {
             parts.push({ key: "r", label: props.runAction });
@@ -21,11 +21,11 @@ export function StatusFooter(props: StatusFooterProps) {
             parts.push({ key: "c", label: "cancel" });
         }
         if (props.canToggleLogMode) {
-            parts.push({ key: "l", label: "log mode" });
+            parts.push({ key: "l", label: `logs: ${props.logMode}` });
         }
         parts.push({ key: "q", label: "quit" });
         return parts;
-    };
+    }
 
     return (
         <box border={["left", "right", "bottom"]} borderColor="#666666" paddingLeft={1}>

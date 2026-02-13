@@ -105,7 +105,17 @@ function App() {
         }
         return getDirectChildTaskKeys(tasks(), row.key).length > 0;
     });
-    const canToggleLogMode = createMemo(() => selectedHasChildren() && selectedCommand() !== null);
+    const selectedHasCommand = createMemo(() => selectedCommand() !== null);
+    const canToggleLogMode = createMemo(() => selectedHasChildren() && selectedHasCommand());
+    const selectedUsesAggregateLogs = createMemo(() => {
+        if (!selectedHasChildren()) {
+            return false;
+        }
+        if (!selectedHasCommand()) {
+            return true;
+        }
+        return logMode() === "aggregate";
+    });
     const canCancelSelected = createMemo(() => {
         const run = selectedRun();
         if (!run) {
@@ -127,12 +137,6 @@ function App() {
         }
         if (selectedIndex() >= rows.length) {
             setSelectedIndex(rows.length - 1);
-        }
-    });
-
-    createEffect(() => {
-        if (!canToggleLogMode() && logMode() === "aggregate") {
-            setLogMode("selected");
         }
     });
 
@@ -276,7 +280,7 @@ function App() {
         const row = selectedRow();
         const runId = selectedRunId();
         selectedRunRevisionKey();
-        const includeChildren = canToggleLogMode() && logMode() === "aggregate";
+        const includeChildren = selectedUsesAggregateLogs();
         if (!row || !runId) {
             setLogs([]);
             return;
@@ -348,6 +352,7 @@ function App() {
                     runAction={selectedRunAction()}
                     canCancel={canCancelSelected()}
                     canToggleLogMode={canToggleLogMode()}
+                    logMode={logMode()}
                 />
             </box>
         </AppContextProvider>
