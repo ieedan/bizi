@@ -273,6 +273,19 @@ function App() {
                     width={42}
                     border={["top", "left", "bottom"]}
                     borderColor="#666666"
+                    customBorderChars={{
+                        topLeft: "┌",
+                        topRight: "┐",
+                        bottomLeft: "├",
+                        bottomRight: "┘",
+                        horizontal: "─",
+                        vertical: "│",
+                        topT: "┬",
+                        bottomT: "┴",
+                        leftT: "├",
+                        rightT: "┤",
+                        cross: "┼",
+                    }}
                     flexDirection="column"
                     paddingX={1}
                 >
@@ -368,7 +381,7 @@ function App() {
                         topLeft: "┬",
                         topRight: "┐",
                         bottomLeft: "┴",
-                        bottomRight: "┘",
+                        bottomRight: "┤",
                         horizontal: "─",
                         vertical: "│",
                         topT: "┬",
@@ -414,7 +427,7 @@ function App() {
                 </box>
             </box>
 
-            <box border borderColor="#666666" paddingLeft={1}>
+            <box border={["left", "right", "bottom"]} borderColor="#666666" paddingLeft={1}>
                 <text>
                     arrows/jk move | jump parents: {isMacOs ? "option+up/down or option+k/j" : "ctrl+up/down or ctrl+k/j"} | r run (root) / restart (subtask) | R restart | c cancel | l log mode | q quit
                     {errorMessage() ? ` | error: ${errorMessage()}` : ""}
