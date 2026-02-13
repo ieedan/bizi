@@ -24,6 +24,7 @@ type TaskGroup = {
 
 const api = createTaskRunnerApi({ port: 7436 });
 const cwd = parseCwdArg(process.argv.slice(2)) ?? process.cwd();
+const isMacOs = process.platform === "darwin";
 
 function App() {
     const renderer = useRenderer();
@@ -64,6 +65,7 @@ function App() {
         }
         return tasks()[row.key]?.command ?? null;
     });
+    const logLineNumberWidth = createMemo(() => Math.max(4, String(logs().length).length));
 
     createEffect(() => {
         const rows = taskRows();
@@ -138,15 +140,19 @@ function App() {
             return;
         }
 
+        if (isJumpParentsBackwardShortcut(key)) {
+            setSelectedIndex((idx) => findPreviousParentTaskIndex(taskRows(), idx));
+            return;
+        }
         if (key.name === "up" || key.name === "k") {
             setSelectedIndex((idx) => Math.max(0, idx - 1));
             return;
         }
+        if (isJumpParentsForwardShortcut(key)) {
+            setSelectedIndex((idx) => findNextParentTaskIndex(taskRows(), idx));
+            return;
+        }
         if (key.name === "down" || key.name === "j") {
-            if (key.ctrl || key.meta) {
-                setSelectedIndex((idx) => findNextParentTaskIndex(taskRows(), idx));
-                return;
-            }
             setSelectedIndex((idx) => Math.min(rows.length - 1, idx + 1));
             return;
         }
@@ -254,7 +260,13 @@ function App() {
     return (
         <box flexDirection="column" height="100%" width="100%">
             <box flexDirection="row" flexGrow={1} gap={1}>
-                <box width={42} border title="tasks" flexDirection="column" padding={1}>
+                <box
+                    width={42}
+                    border
+                    borderColor="#666666"
+                    flexDirection="column"
+                    paddingX={1}
+                >
                     <scrollbox flexGrow={1} height="100%">
                         <For each={taskGroups()}>
                             {(group) => {
@@ -271,7 +283,6 @@ function App() {
                                             border
                                             borderStyle="rounded"
                                             borderColor={rootSelected() ? "#e6e6e6" : "#666666"}
-                                            marginBottom={1}
                                             paddingLeft={1}
                                             paddingRight={1}
                                             height={3}
@@ -290,8 +301,8 @@ function App() {
                                         border
                                         borderStyle="rounded"
                                         borderColor={rootSelected() ? "#e6e6e6" : "#666666"}
-                                        marginBottom={1}
-                                        padding={1}
+                                        paddingLeft={1}
+                                        paddingRight={1}
                                         flexDirection="column"
                                     >
                                         <box
@@ -338,18 +349,36 @@ function App() {
                     </scrollbox>
                 </box>
 
-                <box border title="logs" flexGrow={1} flexDirection="column" padding={1}>
-                    <text>cwd: {cwd}</text>
-                    <text>task: {selectedRow()?.key ?? "-"}</text>
-                    <text>command: {selectedCommand() ?? "(no command)"}</text>
+                <box
+                    border
+                    borderColor="#666666"
+                    flexGrow={1}
+                    flexDirection="column"
+                    paddingX={1}
+                >
+                    <box flexDirection="row">
+                        <text>cwd: {cwd}</text>
+                    </box>
+                    <box flexDirection="row">
+                        <text>task: {selectedRow()?.key ?? "-"}</text>
+                    </box>
+                    <box flexDirection="row">
+                        <text>command: {selectedCommand() ?? "(no command)"}</text>
+                    </box>
                     <box flexGrow={1} marginTop={1}>
                         <scrollbox flexGrow={1} height="100%" stickyScroll stickyStart="bottom">
                             <For each={logs()}>
                                 {(line, idx) => (
                                     <box flexDirection="row">
-                                        <text fg="#666666">{String(idx() + 1).padStart(4, " ")} </text>
-                                        <text fg="#808080">[{line.task}] </text>
-                                        <text>{sanitizeLogForDisplay(line.line)}</text>
+                                        <box width={logLineNumberWidth() + 1} flexShrink={0}>
+                                            <text fg="#666666">
+                                                {String(idx() + 1).padStart(logLineNumberWidth(), " ")}{" "}
+                                            </text>
+                                        </box>
+                                        <text>[{line.task}] </text>
+                                        <box flexGrow={1}>
+                                            <text>{sanitizeLogForDisplay(line.line)}</text>
+                                        </box>
                                     </box>
                                 )}
                             </For>
@@ -358,9 +387,9 @@ function App() {
                 </box>
             </box>
 
-            <box border paddingLeft={1}>
+            <box border borderColor="#666666" paddingLeft={1}>
                 <text>
-                    arrows/jk move | r run | R restart | c cancel | l log mode | q quit
+                    arrows/jk move | jump parents: {isMacOs ? "option+up/down or option+k/j" : "ctrl+up/down or ctrl+k/j"} | r run | R restart | c cancel | l log mode | q quit
                     {errorMessage() ? ` | error: ${errorMessage()}` : ""}
                 </text>
             </box>
@@ -428,6 +457,37 @@ function findNextParentTaskIndex(taskRows: TaskRow[], currentIndex: number): num
         }
     }
     return currentIndex;
+}
+
+function findPreviousParentTaskIndex(taskRows: TaskRow[], currentIndex: number): number {
+    for (let index = currentIndex - 1; index >= 0; index -= 1) {
+        if (taskRows[index]?.depth === 0) {
+            return index;
+        }
+    }
+    return currentIndex;
+}
+
+function isJumpParentsForwardShortcut(key: {
+    name: string;
+    ctrl: boolean;
+    option: boolean;
+}): boolean {
+    if (isMacOs) {
+        return key.option && (key.name === "down" || key.name === "j");
+    }
+    return key.ctrl && (key.name === "down" || key.name === "j");
+}
+
+function isJumpParentsBackwardShortcut(key: {
+    name: string;
+    ctrl: boolean;
+    option: boolean;
+}): boolean {
+    if (isMacOs) {
+        return key.option && (key.name === "up" || key.name === "k");
+    }
+    return key.ctrl && (key.name === "up" || key.name === "k");
 }
 
 function indexRunsByTaskKey(taskRuns: TaskRunTreeNode[]): Map<string, TaskRunTreeNode> {
