@@ -7,10 +7,13 @@ type TaskStatusDisplay = {
 
 export function taskStatusDisplay(status: DisplayTaskStatus): TaskStatusDisplay {
     if (!status) {
-        return { color: "gray", icon: "○" };
+        return { color: "#777777", icon: "○" };
     }
     if (status === "Indeterminate") {
         return { color: "#f4c542", icon: "◐" };
+    }
+    if (status === "Queued") {
+        return { color: "#f4c542", icon: "○" };
     }
     if (status === "Running") {
         return { color: "#31d158", icon: "▶" };
@@ -24,5 +27,5 @@ export function taskStatusDisplay(status: DisplayTaskStatus): TaskStatusDisplay 
     if (status === "Cancelled") {
         return { color: "#777777", icon: "■" };
     }
-    return { color: "gray", icon: "○" };
+    return { color: "#777777", icon: "○" };
 }

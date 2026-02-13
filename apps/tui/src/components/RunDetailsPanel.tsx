@@ -2,6 +2,7 @@ import type { TaskRunLogLine } from "@task-runner/client-js";
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { useAppContext } from "../lib/app-context";
 import { formatElapsedDuration, formatLogTimestamp, formatTaskTagForLog, sanitizeLogForDisplay } from "../lib/logs";
+import { taskStatusDisplay } from "../lib/status";
 
 type RunDetailsPanelProps = {
     selectedStatus: string | null;
@@ -66,25 +67,7 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 
         return (props.selectedStatus ?? "Idle").replace(/\s+/g, " ").trim();
     });
-    const statusIndicator = createMemo(() => {
-        const runStatus = props.selectedRunStatus;
-        if (runStatus === "Running") {
-            return { icon: "▶", color: "#31d158" };
-        }
-        if (runStatus === "Success") {
-            return { icon: "✓", color: "#4da3ff" };
-        }
-        if (runStatus === "Failed") {
-            return { icon: "✖", color: "#ff3b30" };
-        }
-        if (runStatus === "Cancelled") {
-            return { icon: "■", color: "#777777" };
-        }
-        if (runStatus === "Queued") {
-            return { icon: "○", color: "#f4c542" };
-        }
-        return { icon: "○", color: "#777777" };
-    });
+    const statusIndicator = createMemo(() => taskStatusDisplay(props.selectedRunStatus ?? undefined));
 
     return (
         <box flexGrow={1} flexDirection="column">
