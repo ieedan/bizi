@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      - name: Build (aarch64-apple-darwin)
+        run: cargo build -p server --release --target aarch64-apple-darwin
+      - name: Build (x86_64-apple-darwin)
+        run: cargo build -p server --release --target x86_64-apple-darwin
+
+      - name: Rename and upload aarch64
+        run: |
+          cp target/aarch64-apple-darwin/release/task-runner-server task-runner-server-aarch64-apple-darwin
+      - name: Upload aarch64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-runner-server-aarch64-apple-darwin
+          path: task-runner-server-aarch64-apple-darwin
+
+      - name: Rename and upload x86_64
+        run: |
+          cp target/x86_64-apple-darwin/release/task-runner-server task-runner-server-x86_64-apple-darwin
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+      - name: Upload x86_64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-runner-server-x86_64-apple-darwin
+          path: task-runner-server-x86_64-apple-darwin
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
+
+      - name: Build (x86_64-pc-windows-msvc)
+        run: cargo build -p server --release --target x86_64-pc-windows-msvc
+      - name: Build (aarch64-pc-windows-msvc)
+        run: cargo build -p server --release --target aarch64-pc-windows-msvc
+
+      - name: Upload x86_64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-runner-server-x86_64-pc-windows-msvc.exe
+          path: target/x86_64-pc-windows-msvc/release/task-runner-server.exe
+
+      - name: Rename and upload aarch64
+        run: |
+          Copy-Item target/aarch64-pc-windows-msvc/release/task-runner-server.exe task-runner-server-aarch64-pc-windows-msvc.exe
+        shell: pwsh
+      - name: Upload aarch64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-runner-server-aarch64-pc-windows-msvc.exe
+          path: task-runner-server-aarch64-pc-windows-msvc.exe
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Collect release files
+        run: |
+          mkdir -p release
+          for f in task-runner-server-aarch64-apple-darwin/task-runner-server-aarch64-apple-darwin \
+                   task-runner-server-x86_64-apple-darwin/task-runner-server-x86_64-apple-darwin; do
+            [ -f "$f" ] && cp "$f" release/
+          done
+          for f in task-runner-server-x86_64-pc-windows-msvc.exe/task-runner-server-x86_64-pc-windows-msvc.exe \
+                   task-runner-server-aarch64-pc-windows-msvc.exe/task-runner-server-aarch64-pc-windows-msvc.exe; do
+            [ -f "$f" ] && cp "$f" release/
+          done
+          ls -la release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

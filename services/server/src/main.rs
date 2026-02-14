@@ -3,6 +3,8 @@ use server::api::{create_app_state, create_router, tasks};
 use server::db::{connect_sqlite, run_migrations};
 use tokio::net::TcpListener;
 
+const DATABASE_URL: &str = "sqlite://task-runner.db?mode=rwc";
+
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 struct Args {
@@ -10,14 +12,12 @@ struct Args {
     address: String,
     #[arg(long, default_value_t = 7436)]
     port: u16,
-    #[arg(long, default_value = "sqlite://task-runner.db?mode=rwc")]
-    database_url: String,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let db = connect_sqlite(&args.database_url).await?;
+    let db = connect_sqlite(DATABASE_URL).await?;
     run_migrations(&db).await?;
     let state = create_app_state(db);
     let app = create_router(state.clone());

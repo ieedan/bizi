@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+raw_os=$(uname -s)
+case "$raw_os" in
+  Darwin*)  os="darwin" ;;
+  MINGW*|MSYS*|CYGWIN*) os="windows" ;;
+  *)
+    echo -e "${RED}Unsupported OS: $raw_os${NC}"
+    exit 1
+    ;;
+esac
+
+if [ "$os" = "darwin" ]; then
+  PLIST="$HOME/Library/LaunchAgents/com.task-runner.server.plist"
+  DATA_DIR="$HOME/Library/Application Support/task-runner"
+
+  echo "Unloading LaunchAgent..."
+  launchctl unload "$PLIST" 2>/dev/null || true
+  echo "Removing plist..."
+  rm -f "$PLIST"
+  echo "Removing binary..."
+  rm -f /usr/local/bin/task-runner-server "$HOME/.local/bin/task-runner-server"
+  echo "Removing data directory..."
+  rm -rf "$DATA_DIR"
+  echo -e "${GREEN}Uninstall complete.${NC}"
+
+elif [ "$os" = "windows" ]; then
+  DATA_DIR="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}/task-runner"
+
+  echo "Unregistering scheduled task..."
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+    "Unregister-ScheduledTask -TaskName 'TaskRunnerServer' -Confirm:\$false -ErrorAction SilentlyContinue"
+  echo "Removing install directory..."
+  rm -rf "$DATA_DIR"
+  echo -e "${GREEN}Uninstall complete.${NC}"
+fi

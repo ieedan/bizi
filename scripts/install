@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP=task-runner-server
+REPO="${TASK_RUNNER_REPO:-ieedan/task-runner}"
+MUTED='\033[0;2m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+usage() {
+  cat <<EOF
+Task Runner Server Installer
+
+Usage: install [options]
+
+Options:
+  -h, --help              Display this help message
+  -v, --version <version> Install a specific version (e.g., 0.1.0)
+  -b, --binary <path>     Install from a local binary instead of downloading
+
+Examples:
+  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install | bash
+  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install | bash -s -- --version 0.1.0
+  ./scripts/install --binary /path/to/task-runner-server
+
+On Windows, run this script in Git Bash or WSL.
+EOF
+}
+
+requested_version=${VERSION:-}
+binary_path=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -v|--version)
+      if [[ -n "${2:-}" ]]; then
+        requested_version="$2"
+        shift 2
+      else
+        echo -e "${RED}Error: --version requires a version argument${NC}"
+        exit 1
+      fi
+      ;;
+    -b|--binary)
+      if [[ -n "${2:-}" ]]; then
+        binary_path="$2"
+        shift 2
+      else
+        echo -e "${RED}Error: --binary requires a path argument${NC}"
+        exit 1
+      fi
+      ;;
+    *)
+      echo -e "${RED}Unknown option: $1${NC}" >&2
+      exit 1
+      ;;
+  esac
+done
+
+# --- OS and arch detection ---
+raw_os=$(uname -s)
+case "$raw_os" in
+  Darwin*)  os="darwin" ;;
+  Linux*)   os="linux" ;;
+  MINGW*|MSYS*|CYGWIN*) os="windows" ;;
+  *)
+    echo -e "${RED}Unsupported OS: $raw_os${NC}"
+    exit 1
+    ;;
+esac
+
+arch=$(uname -m)
+case "$arch" in
+  aarch64|arm64) arch="arm64" ;;
+  x86_64|amd64) arch="x64" ;;
+  *)
+    echo -e "${RED}Unsupported arch: $arch${NC}"
+    exit 1
+    ;;
+esac
+
+# On macOS x64 under Rosetta, prefer arm64 binary
+if [ "$os" = "darwin" ] && [ "$arch" = "x64" ]; then
+  rosetta=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)
+  if [ "$rosetta" = "1" ]; then
+    arch="arm64"
+  fi
+fi
+
+combo="$os-$arch"
+case "$combo" in
+  darwin-x64|darwin-arm64|windows-x64|windows-arm64) ;;
+  *)
+    echo -e "${RED}Unsupported OS/arch: $os/$arch${NC}"
+    exit 1
+    ;;
+esac
+
+# Map to release asset filename (Rust target triple style)
+case "$combo" in
+  darwin-arm64)  asset_name="task-runner-server-aarch64-apple-darwin" ;;
+  darwin-x64)    asset_name="task-runner-server-x86_64-apple-darwin" ;;
+  windows-x64)   asset_name="task-runner-server-x86_64-pc-windows-msvc.exe" ;;
+  windows-arm64) asset_name="task-runner-server-aarch64-pc-windows-msvc.exe" ;;
+  *) echo -e "${RED}Unsupported: $combo${NC}"; exit 1 ;;
+esac
+
+# --- Install from local binary ---
+install_from_binary() {
+  local src="$1"
+  if [ ! -f "$src" ]; then
+    echo -e "${RED}Binary not found: $src${NC}"
+    exit 1
+  fi
+  if [ "$os" = "darwin" ]; then
+    mkdir -p "$HOME/Library/Application Support/task-runner"
+    BIN_DIR="/usr/local/bin"
+    if [ ! -w "/usr/local/bin" ] 2>/dev/null; then
+      BIN_DIR="$HOME/.local/bin"
+      mkdir -p "$BIN_DIR"
+    fi
+    cp "$src" "$BIN_DIR/task-runner-server"
+    chmod 755 "$BIN_DIR/task-runner-server"
+    DATA_DIR="$HOME/Library/Application Support/task-runner"
+    PLIST="$HOME/Library/LaunchAgents/com.task-runner.server.plist"
+    cat > "$PLIST" <<PLIST_XML
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.task-runner.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$BIN_DIR/task-runner-server</string>
+    <string>--address</string>
+    <string>0.0.0.0</string>
+    <string>--port</string>
+    <string>7436</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>$DATA_DIR</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>$DATA_DIR/out.log</string>
+  <key>StandardErrorPath</key>
+  <string>$DATA_DIR/err.log</string>
+</dict>
+</plist>
+PLIST_XML
+    launchctl unload "$PLIST" 2>/dev/null || true
+    launchctl load "$PLIST"
+    echo -e "${GREEN}Installed. Server is running as a LaunchAgent (port 7436).${NC}"
+    echo -e "  Binary: $BIN_DIR/task-runner-server"
+    echo -e "  Data:   $DATA_DIR"
+  elif [ "$os" = "windows" ]; then
+    DATA_DIR="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}/task-runner"
+    BIN_DIR="$DATA_DIR/bin"
+    mkdir -p "$BIN_DIR"
+    cp "$src" "$BIN_DIR/task-runner-server.exe"
+    EXE_PATH="$BIN_DIR/task-runner-server.exe"
+    # Convert to Windows path for PowerShell (Git Bash: /c/Users -> C:\Users)
+    to_win_path() {
+      if command -v cygpath >/dev/null 2>&1; then
+        cygpath -w "$1"
+      else
+        local p="$1"
+        case "$p" in
+          /[a-zA-Z]/*) p="${p:1:1}:\\${p:3}";;
+        esac
+        echo "$p" | sed 's|/|\\|g'
+      fi
+    }
+    WIN_EXE=$(to_win_path "$EXE_PATH")
+    WIN_DATA=$(to_win_path "$DATA_DIR")
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "
+      \$action = New-ScheduledTaskAction -Execute '${WIN_EXE}' -Argument '--address 0.0.0.0 --port 7436' -WorkingDirectory '${WIN_DATA}'
+      \$trigger = New-ScheduledTaskTrigger -AtLogOn -User \$env:USERNAME
+      \$principal = New-ScheduledTaskPrincipal -UserId \$env:USERNAME -LogonType Interactive
+      Register-ScheduledTask -TaskName 'TaskRunnerServer' -Action \$action -Trigger \$trigger -Principal \$principal -Force
+    "
+    echo -e "${GREEN}Installed. Server will run at logon (port 7436).${NC}"
+    echo -e "  Binary: $BIN_DIR/task-runner-server.exe"
+    echo -e "  Data:   $DATA_DIR"
+  fi
+}
+
+# --- Download and install from GitHub Release ---
+install_from_release() {
+  if [ -z "$requested_version" ]; then
+    version=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+    if [ -z "$version" ]; then
+      echo -e "${RED}Failed to get latest release${NC}"
+      exit 1
+    fi
+    url="https://github.com/${REPO}/releases/latest/download/${asset_name}"
+  else
+    version="${requested_version#v}"
+    url="https://github.com/${REPO}/releases/download/v${version}/${asset_name}"
+    code=$(curl -sI -o /dev/null -w "%{http_code}" "$url")
+    if [ "$code" != "200" ]; then
+      echo -e "${RED}Release v${version} or asset ${asset_name} not found${NC}"
+      exit 1
+    fi
+  fi
+
+  echo -e "${MUTED}Downloading task-runner-server v${version} (${combo})...${NC}"
+  tmp_dir=$(mktemp -d)
+  trap "rm -rf '$tmp_dir'" EXIT
+  curl -fsSL -o "$tmp_dir/$asset_name" "$url"
+  install_from_binary "$tmp_dir/$asset_name"
+}
+
+# --- Main ---
+if [ -n "$binary_path" ]; then
+  install_from_binary "$binary_path"
+else
+  install_from_release
+fi
