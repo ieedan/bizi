@@ -14,7 +14,7 @@ import {
 	formatTaskTagForLog,
 	sanitizeLogForDisplay,
 } from "../lib/logs";
-import { taskStatusDisplay } from "../lib/status";
+import { StatusIndicator } from "./status-indicator";
 
 interface RunDetailsPanelProps {
 	selectedStatus: string | null;
@@ -95,10 +95,6 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 
 		return (props.selectedStatus ?? "Idle").replace(/\s+/g, " ").trim();
 	});
-	const statusIndicator = createMemo(() =>
-		taskStatusDisplay(props.selectedRunStatus ?? undefined)
-	);
-
 	return (
 		<box flexDirection="column" flexGrow={1}>
 			<box
@@ -190,9 +186,9 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 				>
 					<Show when={props.selectedStatus !== "Indeterminate"}>
 						<box flexDirection="row">
-							<text fg={statusIndicator().color}>
-								{statusIndicator().icon}
-							</text>
+							<StatusIndicator
+								status={props.selectedRunStatus ?? undefined}
+							/>
 							<text> {footerStatusText()}</text>
 						</box>
 					</Show>

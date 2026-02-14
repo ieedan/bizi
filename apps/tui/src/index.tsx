@@ -12,7 +12,12 @@ import {
 	createSignal,
 	onCleanup,
 	onMount,
+	Show,
 } from "solid-js";
+import {
+	QuitConfirmationDialog,
+	type RunningTaskRow,
+} from "./components/quit-confirmation-dialog";
 import { RunDetailsPanel } from "./components/run-details-panel";
 import { StatusFooter } from "./components/status-footer";
 import { TaskTreePanel } from "./components/task-tree-panel";
@@ -59,6 +64,9 @@ function App() {
 	const [suppressNextTaskSearchSlash, setSuppressNextTaskSearchSlash] =
 		createSignal(false);
 	const [showTaskSearchError, setShowTaskSearchError] = createSignal(false);
+	const [showQuitConfirmation, setShowQuitConfirmation] = createSignal(false);
+	const [isCancellingBeforeExit, setIsCancellingBeforeExit] =
+		createSignal(false);
 	const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
 
 	const taskTree = createMemo(() => buildTaskTree(tasks()));
@@ -155,6 +163,16 @@ function App() {
 		}
 		return canCancelRun(run);
 	});
+	const runningTaskRows = createMemo<RunningTaskRow[]>(() =>
+		taskRows().flatMap((row) => {
+			const status = runByTaskKey().get(row.key)?.status;
+			if (status !== "Running" && status !== "Queued") {
+				return [];
+			}
+			return [{ key: row.key, depth: row.depth, status }];
+		})
+	);
+	const hasRunningTasks = createMemo(() => runningTaskRows().length > 0);
 	const isLogViewFocused = createMemo(() => focusedPane() === "logs");
 	const logTaskTagWidth = createMemo(() => {
 		const longestTaskName = logs().reduce(
@@ -246,6 +264,39 @@ function App() {
 
 	function handleQuitKey(key: { name: string; ctrl?: boolean }) {
 		return key.name === "q" || (key.ctrl && key.name === "c");
+	}
+
+	async function cancelRunningTasksBeforeExit() {
+		if (isCancellingBeforeExit()) {
+			return;
+		}
+		setIsCancellingBeforeExit(true);
+		const taskKeys = runningTaskRows().map((row) => row.key);
+		await Promise.allSettled(
+			taskKeys.map((taskKey) => {
+				const run = runByTaskKey().get(taskKey);
+				if (!run) {
+					return Promise.resolve();
+				}
+				return api.cancelTask(run.id);
+			})
+		);
+		renderer.destroy();
+	}
+
+	function requestQuit() {
+		if (hasRunningTasks()) {
+			setShowQuitConfirmation(true);
+			return;
+		}
+		renderer.destroy();
+	}
+
+	function handleQuitConfirmationKeys() {
+		if (!showQuitConfirmation()) {
+			return false;
+		}
+		return true;
 	}
 
 	function focusTaskSearch() {
@@ -430,8 +481,11 @@ function App() {
 		if (key.eventType !== "press") {
 			return;
 		}
+		if (handleQuitConfirmationKeys()) {
+			return;
+		}
 		if (handleQuitKey(key)) {
-			renderer.destroy();
+			requestQuit();
 			return;
 		}
 		if (handleTaskSearchShortcut(key)) {
@@ -594,6 +648,21 @@ function App() {
 					logMode={logMode()}
 					runAction={selectedRunAction()}
 				/>
+				<Show when={showQuitConfirmation()}>
+					<QuitConfirmationDialog
+						isCancelling={isCancellingBeforeExit()}
+						onConfirm={(action) => {
+							if (action === "cancelAll") {
+								cancelRunningTasksBeforeExit().catch(() =>
+									renderer.destroy()
+								);
+							} else {
+								renderer.destroy();
+							}
+						}}
+						runningTasks={runningTaskRows()}
+					/>
+				</Show>
 			</box>
 		</AppContextProvider>
 	);

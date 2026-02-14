@@ -1,6 +1,6 @@
 import { For } from "solid-js";
-import { taskStatusDisplay } from "../lib/status";
 import type { DisplayTaskStatus, TaskTreeNode } from "../types";
+import { StatusIndicator } from "./status-indicator";
 
 interface TaskTreeNodeCardProps {
 	node: TaskTreeNode;
@@ -11,7 +11,6 @@ interface TaskTreeNodeCardProps {
 export function TaskTreeNodeCard(props: TaskTreeNodeCardProps) {
 	const nodeDisplayStatus = () =>
 		props.displayStatusByTaskKey.get(props.node.row.key);
-	const nodeStatus = () => taskStatusDisplay(nodeDisplayStatus());
 	const nodeSelected = () => props.selectedTaskKey === props.node.row.key;
 
 	if (props.node.children.length === 0) {
@@ -28,7 +27,7 @@ export function TaskTreeNodeCard(props: TaskTreeNodeCardProps) {
 				paddingRight={1}
 			>
 				<text>{props.node.row.key}</text>
-				<text fg={nodeStatus().color}>{nodeStatus().icon}</text>
+				<StatusIndicator status={nodeDisplayStatus()} />
 			</box>
 		);
 	}
@@ -47,7 +46,7 @@ export function TaskTreeNodeCard(props: TaskTreeNodeCardProps) {
 				justifyContent="space-between"
 			>
 				<text>{props.node.row.key}</text>
-				<text fg={nodeStatus().color}>{nodeStatus().icon}</text>
+				<StatusIndicator status={nodeDisplayStatus()} />
 			</box>
 			<For each={props.node.children}>
 				{(child, i) => (
