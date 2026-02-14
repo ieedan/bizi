@@ -24,6 +24,10 @@ interface RunCommandDependencies {
 	) => Promise<{ data?: unknown; error?: unknown }>;
 	listTaskRuns: (cwd: string) => Promise<{ data?: unknown; error?: unknown }>;
 	getTaskRun: (runId: string) => Promise<{ data?: unknown; error?: unknown }>;
+	getTaskRunLogs: (
+		runId: string,
+		includeChildren?: boolean
+	) => Promise<{ data?: unknown; error?: unknown }>;
 	subscribeTaskRun: (
 		runId: string,
 		handlers: {
@@ -64,17 +68,14 @@ export async function runCommand(
 	}
 	const runId = startResult.data.runId;
 	const startedBySession = activeBeforeRun?.id !== runId;
-	if (args.implicit && process.stdout.isTTY) {
-		process.stdout.write(
-			`Running task "${args.task}" (implicit run mode).\n`
-		);
-	}
 
 	let settled = false;
 	let signalExitCode: number | null = null;
 	let cancelFallbackTimer: NodeJS.Timeout | null = null;
 	let handlingSignal = false;
+	let terminalFinalizing = false;
 	let resolveRun: ((code: number) => void) | null = null;
+	const seenLogKeys = new Set<string>();
 
 	const complete = (code: number) => {
 		if (settled) {
@@ -91,6 +92,66 @@ export async function runCommand(
 		resolveRun = resolve;
 	});
 
+	const emitLog = (log: {
+		runId?: string;
+		sequence?: number;
+		isStderr: boolean;
+		line: string;
+	}) => {
+		const key =
+			typeof log.runId === "string" && typeof log.sequence === "number"
+				? `${log.runId}:${log.sequence}`
+				: null;
+		if (key) {
+			if (seenLogKeys.has(key)) {
+				return;
+			}
+			seenLogKeys.add(key);
+		}
+		printTaskLogLine(log);
+	};
+
+	const flushAggregatedLogs = async (): Promise<number> => {
+		let emittedCount = 0;
+		const logsResponse = await deps.getTaskRunLogs(runId, true);
+		if (
+			logsResponse.error ||
+			!logsResponse.data ||
+			!isTaskRunLogsResponse(logsResponse.data)
+		) {
+			return emittedCount;
+		}
+		for (const log of logsResponse.data.logs) {
+			const beforeSize = seenLogKeys.size;
+			emitLog(log);
+			if (seenLogKeys.size > beforeSize) {
+				emittedCount += 1;
+			}
+		}
+		return emittedCount;
+	};
+
+	const finalizeWithStatus = async (status: TaskRunTreeNode["status"]) => {
+		if (terminalFinalizing || settled) {
+			return;
+		}
+		terminalFinalizing = true;
+		try {
+			// Give logs a brief chance to catch up in storage after terminal status.
+			for (let attempt = 0; attempt < 4; attempt += 1) {
+				await flushAggregatedLogs();
+				if (attempt === 3) {
+					break;
+				}
+				await wait(180);
+			}
+		} catch {
+			// Best-effort flush; status-based exit should still continue.
+		}
+		const exitCode = signalExitCode ?? taskRunStatusExitCode(status);
+		complete(exitCode);
+	};
+
 	const logSocket = deps.subscribeTaskLogs(
 		runId,
 		{
@@ -100,13 +161,15 @@ export async function runCommand(
 				}
 				if (payload.type === "snapshot") {
 					for (const line of payload.logs) {
-						printTaskLogLine(line);
+						emitLog(line);
 					}
 					return;
 				}
 				if (payload.type === "log") {
-					printTaskLogLine(payload.log);
+					emitLog(payload.log);
+					return;
 				}
+				process.stderr.write(`${payload.message}\n`);
 			},
 		},
 		{ includeChildren: true }
@@ -120,14 +183,38 @@ export async function runCommand(
 			if (!isTerminalRunStatus(payload.taskRun.status)) {
 				return;
 			}
-			const exitCode =
-				signalExitCode ?? taskRunStatusExitCode(payload.taskRun.status);
-			complete(exitCode);
+			finalizeWithStatus(payload.taskRun.status).catch(() => {
+				const exitCode =
+					signalExitCode ??
+					taskRunStatusExitCode(payload.taskRun.status);
+				complete(exitCode);
+			});
 		},
 		onError: () => {
 			/* intentional no-op */
 		},
 	});
+
+	const statusPoller = setInterval(() => {
+		if (settled || terminalFinalizing) {
+			return;
+		}
+		deps.getTaskRun(runId)
+			.then((latestRun) => {
+				if (
+					!latestRun.data ||
+					latestRun.error ||
+					!isTaskRunMessage(latestRun.data)
+				) {
+					return;
+				}
+				if (!isTerminalRunStatus(latestRun.data.taskRun.status)) {
+					return;
+				}
+				return finalizeWithStatus(latestRun.data.taskRun.status);
+			})
+			.catch(() => undefined);
+	}, 500);
 
 	const clearSignalHandlers = registerSignalHandlers(async () => {
 		if (handlingSignal || settled) {
@@ -161,22 +248,10 @@ export async function runCommand(
 	});
 
 	try {
-		const latestRun = await deps.getTaskRun(runId);
-		if (
-			!latestRun.error &&
-			latestRun.data &&
-			isTaskRunMessage(latestRun.data) &&
-			isTerminalRunStatus(latestRun.data.taskRun.status)
-		) {
-			const exitCode =
-				signalExitCode ??
-				taskRunStatusExitCode(latestRun.data.taskRun.status);
-			complete(exitCode);
-		}
-
 		const exitCode = await runPromise;
 		return exitCode;
 	} finally {
+		clearInterval(statusPoller);
 		clearSignalHandlers();
 		logSocket.close();
 		runSocket.close();
@@ -249,7 +324,8 @@ function isTaskLogMessage(
 	data: unknown
 ): data is
 	| { type: "snapshot"; logs: Array<{ isStderr: boolean; line: string }> }
-	| { type: "log"; log: { isStderr: boolean; line: string } } {
+	| { type: "log"; log: { isStderr: boolean; line: string } }
+	| { type: "error"; message: string } {
 	return (
 		typeof data === "object" &&
 		data !== null &&
@@ -260,6 +336,29 @@ function isTaskLogMessage(
 			(data.type === "log" &&
 				"log" in data &&
 				typeof data.log === "object" &&
-				data.log !== null))
+				data.log !== null) ||
+			(data.type === "error" &&
+				"message" in data &&
+				typeof data.message === "string"))
 	);
+}
+
+function isTaskRunLogsResponse(data: unknown): data is {
+	logs: Array<{
+		runId: string;
+		sequence: number;
+		isStderr: boolean;
+		line: string;
+	}>;
+} {
+	return (
+		typeof data === "object" &&
+		data !== null &&
+		"logs" in data &&
+		Array.isArray(data.logs)
+	);
+}
+
+function wait(milliseconds: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

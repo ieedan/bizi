@@ -1,6 +1,6 @@
 import { createTaskRunnerApi } from "@task-runner/client-js";
 import { Command } from "commander";
-import type { CliOptions } from "../lib/args";
+import { type CliOptions, parseCliOptions } from "../lib/args";
 import { cancelCommand } from "./cancel";
 import { runCommand } from "./run";
 import { statCommand } from "./stat";
@@ -15,6 +15,11 @@ export async function resolveCliMode(
 	argv: string[],
 	defaultCliOptions: CliOptions
 ): Promise<ResolveCliModeResult> {
+	if (findFirstPositionalTokenIndex(argv) === -1) {
+		const cliOptions = parseCliOptions(argv);
+		return { mode: "tui", cliOptions };
+	}
+
 	const normalized = normalizeImplicitRunCommand(argv);
 	let handledCommand = false;
 	let commandExitCode = 0;

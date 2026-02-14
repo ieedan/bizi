@@ -674,7 +674,6 @@ async function main() {
 	const mode = await resolveCliMode(argv, cliOptions);
 	if (mode.mode === "cli") {
 		process.exit(mode.exitCode);
-		return;
 	}
 
 	cliOptions = mode.cliOptions;
