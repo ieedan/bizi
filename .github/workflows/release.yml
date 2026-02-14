@@ -16,10 +16,11 @@ jobs:
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
 
-      - name: Build (aarch64-apple-darwin)
-        run: cargo build -p server --release --target aarch64-apple-darwin
-      - name: Build (x86_64-apple-darwin)
-        run: cargo build -p server --release --target x86_64-apple-darwin
+      - name: Build (aarch64-apple-darwin, x86_64-apple-darwin)
+        run: |
+          cargo build -p server --release --target aarch64-apple-darwin &
+          cargo build -p server --release --target x86_64-apple-darwin &
+          wait
 
       - name: Rename and upload aarch64
         run: |
@@ -51,10 +52,12 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
 
-      - name: Build (x86_64-pc-windows-msvc)
-        run: cargo build -p server --release --target x86_64-pc-windows-msvc
-      - name: Build (aarch64-pc-windows-msvc)
-        run: cargo build -p server --release --target aarch64-pc-windows-msvc
+      - name: Build (x86_64-pc-windows-msvc, aarch64-pc-windows-msvc)
+        shell: bash
+        run: |
+          cargo build -p server --release --target x86_64-pc-windows-msvc &
+          cargo build -p server --release --target aarch64-pc-windows-msvc &
+          wait
 
       - name: Upload x86_64 artifact
         uses: actions/upload-artifact@v4
