@@ -292,24 +292,9 @@ function App() {
 		renderer.destroy();
 	}
 
-	function handleQuitConfirmationKeys(key: { name: string; ctrl?: boolean }) {
+	function handleQuitConfirmationKeys() {
 		if (!showQuitConfirmation()) {
 			return false;
-		}
-		if (isCancellingBeforeExit()) {
-			return true;
-		}
-		if (
-			key.name === "y" ||
-			key.name === "q" ||
-			(key.ctrl && key.name === "c")
-		) {
-			cancelRunningTasksBeforeExit().catch(() => renderer.destroy());
-			return true;
-		}
-		if (key.name === "n") {
-			renderer.destroy();
-			return true;
 		}
 		return true;
 	}
@@ -496,7 +481,7 @@ function App() {
 		if (key.eventType !== "press") {
 			return;
 		}
-		if (handleQuitConfirmationKeys(key)) {
+		if (handleQuitConfirmationKeys()) {
 			return;
 		}
 		if (handleQuitKey(key)) {
@@ -666,6 +651,15 @@ function App() {
 				<Show when={showQuitConfirmation()}>
 					<QuitConfirmationDialog
 						isCancelling={isCancellingBeforeExit()}
+						onConfirm={(action) => {
+							if (action === "cancelAll") {
+								cancelRunningTasksBeforeExit().catch(() =>
+									renderer.destroy()
+								);
+							} else {
+								renderer.destroy();
+							}
+						}}
 						runningTasks={runningTaskRows()}
 					/>
 				</Show>
