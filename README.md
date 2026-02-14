@@ -32,14 +32,24 @@ Or from a clone: `./scripts/uninstall`
 - [ ] Figure out what the log retention / run retention policy should be
 - [ ] Reevaluate situations where runIds actually make sense. Currently the singleton tasks seem to be a better pattern.
 
-### Create a CLI for users / agents
+## CLI
 
-This could just be bundled with the tui
+The CLI is bundled with the TUI binary:
 
-The idea would be the tui would only activate if no subcommand/args were provided.
+- `task-runner` launches the interactive TUI.
+- `task-runner <task>` is an implicit run command (same behavior as `task-runner run <task>`).
+- `task-runner run <task>` starts or attaches to a task run and streams logs.
+- `task-runner cancel <task>` cancels an active run for the task.
+- `task-runner stat <task>` prints task run status.
+- `task-runner stat <task> --json` prints machine-readable status output.
 
-Otherwise the commands could be:
+Reserved command names take precedence over implicit task names (`run`, `cancel`, `stat`). To run a task with one of those names, use the explicit form: `task-runner run <task-name>`.
 
-- `run <task>` - Runs a command `task-runner run dev` this will either run or hook into an existing task run we would keep track of which one so that we can handle things nicely for agents. For instance in non-interactive mode we would only kill the process on exit if it was started by that session. In interactive mode we can simply ask the user if they want to cancel the task that was/wasn't started in their session
-- `cancel <task>` - Cancels an existing task by name
-- `stat <task>` - Get information about a task to see if it's running or what
+Run-mode behavior:
+
+- Default is interactive in TTY environments.
+- Use `task-runner run <task> --non-interactive` to force non-interactive mode.
+- Interactive mode prompts before exiting so you can choose whether to cancel the run.
+- Non-interactive mode only auto-cancels on signal if the run was started by the current CLI session.
+
+User-facing CLI prompts are powered by `clack`.

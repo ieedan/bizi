@@ -15,11 +15,13 @@
   "dependencies": {
     "@babel/core": "^7.29.0",
     "@babel/preset-typescript": "^7.28.5",
+    "@clack/prompts": "^1.0.1",
     "@opentui/core": "^0.1.79",
     "@opentui/solid": "^0.1.79",
     "@task-runner/client-js": "workspace:*",
     "babel-preset-solid": "1.9.9",
     "commander": "^14.0.3",
+    "picocolors": "^1.1.1",
     "solid-js": "1.9.9",
     "zod": "^4.3.6"
   }
