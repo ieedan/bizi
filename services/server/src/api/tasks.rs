@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::process::Stdio;
 
 use axum::{
@@ -1220,11 +1221,21 @@ async fn run_command(
     )
     .await;
 
-    let mut command_builder = Command::new("sh");
+    let resolved_cwd = resolve_command_cwd(cwd);
+    let mut command_builder = Command::new(resolve_command_shell());
+    if let Some(path) = build_task_command_path() {
+        command_builder.env("PATH", path);
+    }
+    command_builder.env("PWD", &resolved_cwd);
+    if std::env::var_os("HOME").is_none() {
+        if let Some(home) = infer_home_from_path(&resolved_cwd) {
+            command_builder.env("HOME", home);
+        }
+    }
     command_builder
         .arg("-lc")
         .arg(command.as_str())
-        .current_dir(cwd)
+        .current_dir(&resolved_cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     #[cfg(unix)]
@@ -1301,6 +1312,86 @@ async fn run_command(
         }
         Err(_) => TaskRunStatus::Failed,
     }
+}
+
+fn build_task_command_path() -> Option<std::ffi::OsString> {
+    let mut seen = HashSet::new();
+    let mut entries = Vec::new();
+
+    if let Some(existing_path) = std::env::var_os("PATH") {
+        for path in std::env::split_paths(&existing_path) {
+            if seen.insert(path.clone()) {
+                entries.push(path);
+            }
+        }
+    }
+
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        for relative in [".bun/bin", ".cargo/bin", ".local/bin"] {
+            let path = home.join(relative);
+            if path.exists() && seen.insert(path.clone()) {
+                entries.push(path);
+            }
+        }
+    }
+
+    for path in ["/opt/homebrew/bin", "/usr/local/bin"] {
+        let path = PathBuf::from(path);
+        if path.exists() && seen.insert(path.clone()) {
+            entries.push(path);
+        }
+    }
+
+    std::env::join_paths(entries).ok()
+}
+
+fn resolve_command_cwd(cwd: &str) -> PathBuf {
+    std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd))
+}
+
+fn resolve_command_shell() -> std::ffi::OsString {
+    if let Some(shell) = std::env::var_os("SHELL") {
+        if !shell.is_empty() {
+            return shell;
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        return "/bin/zsh".into();
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        "sh".into()
+    }
+}
+
+fn infer_home_from_path(path: &PathBuf) -> Option<PathBuf> {
+    let mut components = path.components();
+    let root = components.next()?;
+    let users = components.next()?;
+    let username = components.next()?;
+
+    use std::path::{Component, Path};
+    if root != Component::RootDir {
+        return None;
+    }
+
+    if users.as_os_str() == "Users" || users.as_os_str() == "users" {
+        return Some(
+            Path::new("/")
+                .join(users.as_os_str())
+                .join(username.as_os_str()),
+        );
+    }
+
+    if users.as_os_str() == "home" {
+        return Some(Path::new("/").join("home").join(username.as_os_str()));
+    }
+
+    None
 }
 
 async fn find_existing_running_run_id(
