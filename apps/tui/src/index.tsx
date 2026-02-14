@@ -14,6 +14,7 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import { resolveCliMode } from "./commands/cli";
 import {
 	QuitConfirmationDialog,
 	type RunningTaskRow,
@@ -22,7 +23,7 @@ import { RunDetailsPanel } from "./components/run-details-panel";
 import { StatusFooter } from "./components/status-footer";
 import { TaskTreePanel } from "./components/task-tree-panel";
 import { AppContextProvider } from "./lib/app-context";
-import { parseCliOptions } from "./lib/args";
+import type { CliOptions } from "./lib/args";
 import {
 	isJumpParentsBackwardShortcut,
 	isJumpParentsForwardShortcut,
@@ -44,8 +45,9 @@ import {
 import type { LogMode } from "./types";
 
 const api = createTaskRunnerApi({ port: 7436 });
-const cliOptions = parseCliOptions(process.argv.slice(2));
-const cwd = cliOptions.cwd;
+const argv = process.argv.slice(2);
+let cliOptions: CliOptions = { cwd: process.cwd() };
+let cwd = cliOptions.cwd;
 const isMacOs = process.platform === "darwin";
 
 function App() {
@@ -668,4 +670,23 @@ function App() {
 	);
 }
 
-render(() => <App />);
+async function main() {
+	const mode = await resolveCliMode(argv, cliOptions);
+	if (mode.mode === "cli") {
+		process.exit(mode.exitCode);
+		return;
+	}
+
+	cliOptions = mode.cliOptions;
+	cwd = cliOptions.cwd;
+	render(() => <App />);
+}
+
+main().catch((error: unknown) => {
+	if (error instanceof Error) {
+		process.stderr.write(`${error.message}\n`);
+	} else {
+		process.stderr.write("Unknown CLI error.\n");
+	}
+	process.exit(1);
+});

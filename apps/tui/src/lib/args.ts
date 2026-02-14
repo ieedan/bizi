@@ -9,7 +9,7 @@ export type CliOptions = z.infer<typeof cliOptionsSchema>;
 
 export function parseCliOptions(argv: string[]): CliOptions {
 	const program = new Command()
-		.name("task-runner-tui")
+		.name("task-runner")
 		.allowUnknownOption(false)
 		.allowExcessArguments(false)
 		.option(
@@ -19,6 +19,5 @@ export function parseCliOptions(argv: string[]): CliOptions {
 		);
 
 	program.parse(argv, { from: "user" });
-
 	return cliOptionsSchema.parse(program.opts());
 }
