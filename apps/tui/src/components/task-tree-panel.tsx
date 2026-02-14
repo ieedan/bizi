@@ -37,7 +37,7 @@ export function TaskTreePanel(props: TaskTreePanelProps) {
 				paddingX={1}
 				width="100%"
 			>
-				<box border borderColor={taskSearchBorderColor()} paddingX={1}>
+				<box border borderColor={taskSearchBorderColor()} paddingX={1} height={3} marginBottom={1}>
 					<input
 						focused={props.isTaskSearchFocused}
 						onInput={props.onTaskSearchInput}
