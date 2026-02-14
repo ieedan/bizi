@@ -21,6 +21,7 @@
     "@task-runner/client-js": "workspace:*",
     "babel-preset-solid": "1.9.9",
     "commander": "^14.0.3",
+    "picocolors": "^1.1.1",
     "solid-js": "1.9.9",
     "zod": "^4.3.6"
   }

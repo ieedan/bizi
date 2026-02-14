@@ -41,6 +41,45 @@ export function findActiveRunByTaskKey(
 		.sort((left, right) => right.updatedAt - left.updatedAt)[0];
 }
 
+export function isTaskInSubtree(taskKey: string, rootTaskKey: string): boolean {
+	return taskKey === rootTaskKey || taskKey.startsWith(`${rootTaskKey}:`);
+}
+
+export function findLatestRunInTaskSubtree(
+	taskRuns: TaskRunTreeNode[],
+	rootTaskKey: string
+): TaskRunTreeNode | undefined {
+	return flattenTaskRuns(taskRuns)
+		.filter((run) => isTaskInSubtree(run.task, rootTaskKey))
+		.sort((left, right) => right.updatedAt - left.updatedAt)[0];
+}
+
+export function findActiveRunInTaskSubtree(
+	taskRuns: TaskRunTreeNode[],
+	rootTaskKey: string
+): TaskRunTreeNode | undefined {
+	return flattenTaskRuns(taskRuns)
+		.filter(
+			(run) =>
+				isTaskInSubtree(run.task, rootTaskKey) &&
+				activeStatuses.has(run.status)
+		)
+		.sort((left, right) => right.updatedAt - left.updatedAt)[0];
+}
+
+export function findActiveRunsInTaskSubtree(
+	taskRuns: TaskRunTreeNode[],
+	rootTaskKey: string
+): TaskRunTreeNode[] {
+	return flattenTaskRuns(taskRuns)
+		.filter(
+			(run) =>
+				isTaskInSubtree(run.task, rootTaskKey) &&
+				activeStatuses.has(run.status)
+		)
+		.sort((left, right) => right.updatedAt - left.updatedAt);
+}
+
 export function isTerminalRunStatus(
 	status: TaskRunTreeNode["status"]
 ): boolean {

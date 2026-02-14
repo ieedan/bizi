@@ -1,7 +1,6 @@
 import type { TaskRunTreeNode } from "@task-runner/client-js";
 import { z } from "zod";
-import { findActiveRunByTaskKey } from "../lib/cli-task-runs";
-import { canCancelRun } from "../lib/task-runs";
+import { findActiveRunsInTaskSubtree } from "../lib/cli-task-runs";
 
 const cancelCommandArgsSchema = z.object({
 	cwd: z.string().min(1),
@@ -21,24 +20,45 @@ export async function cancelCommand(
 ): Promise<number> {
 	const args = cancelCommandArgsSchema.parse(input);
 	const taskRuns = await listTaskRunsOrThrow(deps, args.cwd);
-	const activeRun = findActiveRunByTaskKey(taskRuns, args.task);
+	const activeRuns = dedupeRunsById(
+		findActiveRunsInTaskSubtree(taskRuns, args.task)
+	);
 
-	if (!activeRun) {
-		process.stderr.write(`No active run found for task "${args.task}".\n`);
-		return 1;
-	}
-	if (!canCancelRun(activeRun)) {
-		process.stderr.write(`Task "${args.task}" cannot be cancelled.\n`);
-		return 1;
-	}
-
-	const cancellation = await deps.cancelTask(activeRun.id);
-	if (cancellation.error) {
-		process.stderr.write(`Failed to cancel task "${args.task}".\n`);
+	if (activeRuns.length === 0) {
+		process.stderr.write(
+			`No active runs found for task "${args.task}" or its subtasks.\n`
+		);
 		return 1;
 	}
 
-	process.stdout.write(`Cancelled task "${args.task}" (${activeRun.id}).\n`);
+	const outcomes = await Promise.all(
+		activeRuns.map(async (run) => {
+			try {
+				const cancellation = await deps.cancelTask(run.id);
+				return { run, ok: !cancellation.error };
+			} catch {
+				return { run, ok: false };
+			}
+		})
+	);
+
+	const successful = outcomes.filter((outcome) => outcome.ok);
+	const failed = outcomes.filter((outcome) => !outcome.ok);
+
+	if (successful.length > 0) {
+		process.stdout.write(
+			`Cancelled ${successful.length}/${outcomes.length} run(s) for "${args.task}" and its subtasks.\n`
+		);
+	}
+
+	if (failed.length > 0) {
+		const failedRunIds = failed.map((outcome) => outcome.run.id).join(", ");
+		process.stderr.write(
+			`Failed to cancel ${failed.length} run(s): ${failedRunIds}\n`
+		);
+		return 1;
+	}
+
 	return 0;
 }
 
@@ -66,4 +86,14 @@ function isTaskRunsResponse(
 		"taskRuns" in data &&
 		Array.isArray(data.taskRuns)
 	);
+}
+
+function dedupeRunsById(runs: TaskRunTreeNode[]): TaskRunTreeNode[] {
+	const byId = new Map<string, TaskRunTreeNode>();
+	for (const run of runs) {
+		if (!byId.has(run.id)) {
+			byId.set(run.id, run);
+		}
+	}
+	return [...byId.values()];
 }
