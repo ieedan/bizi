@@ -2,3 +2,5 @@ target
 node_modules
 dist
 *.db
+packages/bizi-*/bin/*
+!packages/bizi-*/bin/.gitkeep

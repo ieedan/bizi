@@ -1,9 +1,31 @@
 {
   "name": "bizi",
+  "version": "0.0.3",
+  "description": "Terminal UI for bizi",
+  "license": "MIT",
   "module": "src/index.tsx",
   "type": "module",
+  "bin": {
+    "bizi": "./bin/bizi.js"
+  },
+  "files": [
+    "bin/**/*",
+    "README.md"
+  ],
   "scripts": {
-    "dev": "bun run src/index.tsx"
+    "dev": "bun run src/index.tsx",
+    "build:bundle": "bun run scripts/build.ts bundle",
+    "compile:darwin-arm64": "bun run scripts/build.ts compile darwin-arm64",
+    "compile:darwin-x64": "bun run scripts/build.ts compile darwin-x64",
+    "compile:win32-x64": "bun run scripts/build.ts compile windows-x64",
+    "compile:win32-arm64": "bun run scripts/build.ts compile windows-arm64",
+    "compile:all": "bun run scripts/build.ts compile-all"
+  },
+  "optionalDependencies": {
+    "@getbizi/bizi-darwin-arm64": "0.0.3",
+    "@getbizi/bizi-darwin-x64": "0.0.3",
+    "@getbizi/bizi-win32-x64": "0.0.3",
+    "@getbizi/bizi-win32-arm64": "0.0.3"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -17,7 +39,7 @@
     "@clack/prompts": "^1.0.1",
     "@opentui/core": "^0.1.79",
     "@opentui/solid": "^0.1.79",
-    "@getbizi/client": "workspace:*",
+    "@getbizi/client": "^0.0.2",
     "babel-preset-solid": "1.9.9",
     "commander": "^14.0.3",
     "picocolors": "^1.1.1",

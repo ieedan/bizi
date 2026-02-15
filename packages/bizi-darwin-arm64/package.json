@@ -1,0 +1,19 @@
+{
+  "name": "@getbizi/bizi-darwin-arm64",
+  "version": "0.0.3",
+  "license": "MIT",
+  "type": "module",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin/bizi",
+    "README.md"
+  ],
+  "bin": {
+    "bizi": "./bin/bizi"
+  }
+}

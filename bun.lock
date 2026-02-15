@@ -13,6 +13,10 @@
     },
     "apps/tui": {
       "name": "bizi",
+      "version": "0.0.0",
+      "bin": {
+        "bizi": "./bin/bizi.js",
+      },
       "dependencies": {
         "@babel/core": "^7.29.0",
         "@babel/preset-typescript": "^7.28.5",
@@ -29,8 +33,42 @@
       "devDependencies": {
         "@types/bun": "latest",
       },
+      "optionalDependencies": {
+        "@getbizi/bizi-darwin-arm64": "0.0.0",
+        "@getbizi/bizi-darwin-x64": "0.0.0",
+        "@getbizi/bizi-win32-arm64": "0.0.0",
+        "@getbizi/bizi-win32-x64": "0.0.0",
+      },
       "peerDependencies": {
         "typescript": "^5",
+      },
+    },
+    "packages/bizi-darwin-arm64": {
+      "name": "@getbizi/bizi-darwin-arm64",
+      "version": "0.0.0",
+      "bin": {
+        "bizi": "./bin/bizi",
+      },
+    },
+    "packages/bizi-darwin-x64": {
+      "name": "@getbizi/bizi-darwin-x64",
+      "version": "0.0.0",
+      "bin": {
+        "bizi": "./bin/bizi",
+      },
+    },
+    "packages/bizi-win32-arm64": {
+      "name": "@getbizi/bizi-win32-arm64",
+      "version": "0.0.0",
+      "bin": {
+        "bizi": "./bin/bizi.exe",
+      },
+    },
+    "packages/bizi-win32-x64": {
+      "name": "@getbizi/bizi-win32-x64",
+      "version": "0.0.0",
+      "bin": {
+        "bizi": "./bin/bizi.exe",
       },
     },
     "packages/client-js": {
@@ -185,6 +223,14 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.27.3", "", { "os": "win32", "cpu": "ia32" }, "sha512-QLKSFeXNS8+tHW7tZpMtjlNb7HKau0QDpwm49u0vUp9y1WOF+PEzkU84y9GqYaAVW8aH8f3GcBck26jh54cX4Q=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.27.3", "", { "os": "win32", "cpu": "x64" }, "sha512-4uJGhsxuptu3OcpVAzli+/gWusVGwZZHTlS63hh++ehExkVT8SgiEf7/uC/PclrPPkLhZqGgCTjd0VWLo6xMqA=="],
+
+    "@getbizi/bizi-darwin-arm64": ["@getbizi/bizi-darwin-arm64@workspace:packages/bizi-darwin-arm64"],
+
+    "@getbizi/bizi-darwin-x64": ["@getbizi/bizi-darwin-x64@workspace:packages/bizi-darwin-x64"],
+
+    "@getbizi/bizi-win32-arm64": ["@getbizi/bizi-win32-arm64@workspace:packages/bizi-win32-arm64"],
+
+    "@getbizi/bizi-win32-x64": ["@getbizi/bizi-win32-x64@workspace:packages/bizi-win32-x64"],
 
     "@getbizi/client": ["@getbizi/client@workspace:packages/client-js"],
 
