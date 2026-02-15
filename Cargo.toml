@@ -1,3 +1,3 @@
 [workspace]
-members = ["crates/bizi"]
+members = ["services/server"]
 resolver = "3"
