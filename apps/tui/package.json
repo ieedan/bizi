@@ -1,8 +1,7 @@
 {
-  "name": "tui",
+  "name": "bizi",
   "module": "src/index.tsx",
   "type": "module",
-  "private": true,
   "scripts": {
     "dev": "bun run src/index.tsx"
   },
@@ -18,7 +17,7 @@
     "@clack/prompts": "^1.0.1",
     "@opentui/core": "^0.1.79",
     "@opentui/solid": "^0.1.79",
-    "@task-runner/client-js": "workspace:*",
+    "@getbizi/client": "workspace:*",
     "babel-preset-solid": "1.9.9",
     "commander": "^14.0.3",
     "picocolors": "^1.1.1",

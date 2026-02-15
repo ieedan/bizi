@@ -1,4 +1,4 @@
-import type { Task } from "@task-runner/client-js";
+import type { Task } from "@getbizi/client";
 import type { TaskRow, TaskTreeNode } from "../types";
 
 export function flattenTaskRows(taskTree: TaskTreeNode[]): TaskRow[] {

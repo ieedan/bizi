@@ -1,4 +1,4 @@
-import type { Task, TaskRunTreeNode } from "@task-runner/client-js";
+import type { Task, TaskRunTreeNode } from "@getbizi/client";
 import type { DisplayTaskStatus } from "../types";
 import { getDirectChildTaskKeys } from "./task-structure";
 

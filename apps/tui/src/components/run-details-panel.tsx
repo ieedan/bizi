@@ -1,4 +1,4 @@
-import type { TaskRunLogLine } from "@task-runner/client-js";
+import type { TaskRunLogLine } from "@getbizi/client";
 import {
 	createMemo,
 	createSignal,

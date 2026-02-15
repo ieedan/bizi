@@ -1,4 +1,4 @@
-import type { Task, TaskRunTreeNode } from "@task-runner/client-js";
+import type { Task, TaskRunTreeNode } from "@getbizi/client";
 import pc from "picocolors";
 import { z } from "zod";
 import {

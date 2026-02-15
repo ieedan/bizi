@@ -1,4 +1,4 @@
-import type { TaskRunTreeNode } from "@task-runner/client-js";
+import type { TaskRunTreeNode } from "@getbizi/client";
 import { z } from "zod";
 import { findActiveRunsInTaskSubtree } from "../lib/cli-task-runs";
 

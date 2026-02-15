@@ -1,11 +1,11 @@
-import { render, useKeyboard, useRenderer } from "@opentui/solid";
 import {
 	createTaskRunnerApi,
 	type Task,
 	type TaskRunLogLine,
 	type TaskRunLogsStreamMessage,
 	type TaskRunTreeNode,
-} from "@task-runner/client-js";
+} from "@getbizi/client";
+import { render, useKeyboard, useRenderer } from "@opentui/solid";
 import {
 	createEffect,
 	createMemo,

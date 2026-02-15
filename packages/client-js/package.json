@@ -1,6 +1,6 @@
 {
-  "name": "@task-runner/client-js",
-  "description": "JavaScript/TypeScript client for the task-runner service",
+  "name": "@getbizi/client",
+  "description": "Client library for the bizi service",
   "version": "0.0.0",
   "license": "MIT",
   "type": "module",

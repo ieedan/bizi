@@ -16,25 +16,25 @@ case "$raw_os" in
 esac
 
 if [ "$os" = "darwin" ]; then
-  PLIST="$HOME/Library/LaunchAgents/com.task-runner.server.plist"
-  DATA_DIR="$HOME/Library/Application Support/task-runner"
+  PLIST="$HOME/Library/LaunchAgents/com.getbizi.server.plist"
+  DATA_DIR="$HOME/Library/Application Support/bizi"
 
   echo "Unloading LaunchAgent..."
   launchctl unload "$PLIST" 2>/dev/null || true
   echo "Removing plist..."
   rm -f "$PLIST"
   echo "Removing binary..."
-  rm -f /usr/local/bin/task-runner-server "$HOME/.local/bin/task-runner-server"
+  rm -f /usr/local/bin/bizi-server "$HOME/.local/bin/bizi-server"
   echo "Removing data directory..."
   rm -rf "$DATA_DIR"
   echo -e "${GREEN}Uninstall complete.${NC}"
 
 elif [ "$os" = "windows" ]; then
-  DATA_DIR="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}/task-runner"
+  DATA_DIR="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}/bizi"
 
   echo "Unregistering scheduled task..."
   powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
-    "Unregister-ScheduledTask -TaskName 'TaskRunnerServer' -Confirm:\$false -ErrorAction SilentlyContinue"
+    "Unregister-ScheduledTask -TaskName 'BiziServer' -Confirm:\$false -ErrorAction SilentlyContinue"
   echo "Removing install directory..."
   rm -rf "$DATA_DIR"
   echo -e "${GREEN}Uninstall complete.${NC}"

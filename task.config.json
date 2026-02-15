@@ -33,7 +33,7 @@
           "command": "bun ultracite check"
         },
         "cargo": {
-          "command": "cargo check -p server"
+          "command": "cargo check -p bizi"
         }
       }
     },

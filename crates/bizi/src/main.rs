@@ -1,9 +1,9 @@
 use clap::Parser;
-use server::api::{create_app_state, create_router, tasks};
-use server::db::{connect_sqlite, run_migrations};
+use bizi::api::{create_app_state, create_router, tasks};
+use bizi::db::{connect_sqlite, run_migrations};
 use tokio::net::TcpListener;
 
-const DATABASE_URL: &str = "sqlite://task-runner.db?mode=rwc";
+const DATABASE_URL: &str = "sqlite://bizi.db?mode=rwc";
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]

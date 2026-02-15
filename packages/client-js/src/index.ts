@@ -3,7 +3,7 @@ import type { components, paths } from "./api";
 
 export interface ClientOptions {
 	/**
-	 * The port to connect to the task runner service on. @default 7436
+	 * The port to connect to the bizi service on. @default 7436
 	 */
 	port: number;
 	/**

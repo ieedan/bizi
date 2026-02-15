@@ -1,4 +1,4 @@
-import { createTaskRunnerApi } from "@task-runner/client-js";
+import { createTaskRunnerApi } from "@getbizi/client";
 import { Command } from "commander";
 import { type CliOptions, parseCliOptions } from "../lib/args";
 import { cancelCommand } from "./cancel";
@@ -27,7 +27,7 @@ export async function resolveCliMode(
 	const api = createTaskRunnerApi({ port: 7436 });
 
 	const program = new Command()
-		.name("task-runner")
+		.name("bizi")
 		.allowUnknownOption(false)
 		.allowExcessArguments(false)
 		.option(

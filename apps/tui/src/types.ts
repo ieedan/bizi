@@ -1,4 +1,4 @@
-import type { TaskRunTreeNode } from "@task-runner/client-js";
+import type { TaskRunTreeNode } from "@getbizi/client";
 
 export interface TaskRow {
 	key: string;

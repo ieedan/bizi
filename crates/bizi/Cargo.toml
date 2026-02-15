@@ -1,10 +1,10 @@
 [package]
-name = "server"
+name = "bizi"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "task-runner-server"
+name = "bizi-server"
 path = "src/main.rs"
 
 [dependencies]

@@ -1,4 +1,4 @@
-# task-runner TUI
+# bizi TUI
 
 Install dependencies:
 
@@ -9,7 +9,7 @@ bun install
 Run the server and then start the TUI:
 
 ```bash
-cargo run -p server
+cargo run -p bizi
 bun --cwd apps/tui dev -- --cwd /path/to/project
 ```
 

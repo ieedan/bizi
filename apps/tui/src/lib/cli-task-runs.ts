@@ -1,4 +1,4 @@
-import type { TaskRunTreeNode } from "@task-runner/client-js";
+import type { TaskRunTreeNode } from "@getbizi/client";
 
 const activeStatuses = new Set<TaskRunTreeNode["status"]>([
 	"Queued",
