@@ -4,6 +4,7 @@ on:
   repository_dispatch:
     types:
       - release-please-published
+  workflow_dispatch:
 
 jobs:
   resolve-release-set:
