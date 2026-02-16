@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/ieedan/bizi/compare/tui-v0.2.1...tui-v0.2.2) (2026-02-16)
+
+
+### Bug Fixes
+
+* **tui:** repair pnpm lock ([ce27ab9](https://github.com/ieedan/bizi/commit/ce27ab9d81540b5f83ae6776ea4d2b31a0b3edde))
+
 ## [0.2.1](https://github.com/ieedan/bizi/compare/tui-v0.2.0...tui-v0.2.1) (2026-02-16)
 
 
