@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/ieedan/bizi/compare/server-v0.2.4...server-v0.2.5) (2026-02-16)
+
+
+### Bug Fixes
+
+* **server:** Fix install ([23d7480](https://github.com/ieedan/bizi/commit/23d74800bb6a351a74fb9b4b3916a0eb5dd73ab7))
+
 ## [0.2.4](https://github.com/ieedan/bizi/compare/server-v0.2.3...server-v0.2.4) (2026-02-16)
 
 
