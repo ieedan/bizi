@@ -14,6 +14,7 @@ jobs:
       publish_tui: ${{ steps.resolve.outputs.publish_tui }}
       publish_server: ${{ steps.resolve.outputs.publish_server }}
       released_paths_json: ${{ steps.resolve.outputs.released_paths_json }}
+      server_tag: ${{ steps.server-tag.outputs.tag }}
     steps:
       - name: Resolve released package paths
         id: resolve
@@ -35,6 +36,19 @@ jobs:
             core.setOutput('publish_server', String(publishServer));
             core.setOutput('released_paths_json', JSON.stringify(releasedPaths));
 
+      - uses: actions/checkout@v4
+        if: steps.resolve.outputs.publish_server == 'true'
+
+      - name: Get latest server release tag
+        id: server-tag
+        if: steps.resolve.outputs.publish_server == 'true'
+        run: |
+          git fetch --tags --force
+          tag=$(git tag -l 'server-v*' --sort=-v:refname | head -1)
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-server:
     needs: [resolve-release-set]
     if: ${{ needs.resolve-release-set.outputs.publish_server == 'true' }}
@@ -51,6 +65,109 @@ jobs:
         run: cargo publish -p bizi-server
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  build-server-assets-macos:
+    needs: [resolve-release-set]
+    if: ${{ needs.resolve-release-set.outputs.publish_server == 'true' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-release-set.outputs.server_tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      - name: Build (aarch64-apple-darwin, x86_64-apple-darwin)
+        run: |
+          cargo build -p bizi-server --release --target aarch64-apple-darwin &
+          cargo build -p bizi-server --release --target x86_64-apple-darwin &
+          wait
+
+      - name: Rename and upload aarch64
+        run: cp target/aarch64-apple-darwin/release/bizi-server bizi-server-aarch64-apple-darwin
+      - name: Upload aarch64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bizi-server-aarch64-apple-darwin
+          path: bizi-server-aarch64-apple-darwin
+
+      - name: Rename and upload x86_64
+        run: cp target/x86_64-apple-darwin/release/bizi-server bizi-server-x86_64-apple-darwin
+      - name: Upload x86_64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bizi-server-x86_64-apple-darwin
+          path: bizi-server-x86_64-apple-darwin
+
+  build-server-assets-windows:
+    needs: [resolve-release-set]
+    if: ${{ needs.resolve-release-set.outputs.publish_server == 'true' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-release-set.outputs.server_tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
+
+      - name: Build (x86_64-pc-windows-msvc, aarch64-pc-windows-msvc)
+        shell: bash
+        run: |
+          cargo build -p bizi-server --release --target x86_64-pc-windows-msvc &
+          cargo build -p bizi-server --release --target aarch64-pc-windows-msvc &
+          wait
+
+      - name: Upload x86_64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bizi-server-x86_64-pc-windows-msvc.exe
+          path: target/x86_64-pc-windows-msvc/release/bizi-server.exe
+
+      - name: Rename and upload aarch64
+        run: Copy-Item target/aarch64-pc-windows-msvc/release/bizi-server.exe bizi-server-aarch64-pc-windows-msvc.exe
+        shell: pwsh
+      - name: Upload aarch64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bizi-server-aarch64-pc-windows-msvc.exe
+          path: bizi-server-aarch64-pc-windows-msvc.exe
+
+  upload-server-release-assets:
+    needs: [resolve-release-set, build-server-assets-macos, build-server-assets-windows]
+    if: ${{ needs.resolve-release-set.outputs.publish_server == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Collect release files
+        run: |
+          mkdir -p release
+          for f in bizi-server-aarch64-apple-darwin/bizi-server-aarch64-apple-darwin \
+                   bizi-server-x86_64-apple-darwin/bizi-server-x86_64-apple-darwin; do
+            [ -f "$f" ] && cp "$f" release/
+          done
+          for f in bizi-server-x86_64-pc-windows-msvc.exe/bizi-server-x86_64-pc-windows-msvc.exe \
+                   bizi-server-aarch64-pc-windows-msvc.exe/bizi-server-aarch64-pc-windows-msvc.exe; do
+            [ -f "$f" ] && cp "$f" release/
+          done
+          ls -la release/
+
+      - name: Upload server artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-release-set.outputs.server_tag }}
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-client:
     needs: [resolve-release-set]
