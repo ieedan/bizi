@@ -15,5 +15,7 @@
   ],
   "bin": {
     "bizi": "./bin/bizi"
-  }
+  },
+  "repository": "https://github.com/ieedan/bizi",
+  "homepage": "https://getbizi.dev"
 }

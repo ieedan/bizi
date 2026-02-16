@@ -1,4 +1,4 @@
-import { createTaskRunnerApi } from "@getbizi/client";
+import { createBiziApi } from "@getbizi/client";
 import { Command } from "commander";
 import { type CliOptions, parseCliOptions } from "../lib/args";
 import { cancelCommand } from "./cancel";
@@ -24,7 +24,7 @@ export async function resolveCliMode(
 	let handledCommand = false;
 	let commandExitCode = 0;
 	let resolvedCliOptions = defaultCliOptions;
-	const api = createTaskRunnerApi({ port: 7436 });
+	const api = createBiziApi({ port: 7436 });
 
 	const program = new Command()
 		.name("bizi")

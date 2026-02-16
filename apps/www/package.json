@@ -39,5 +39,7 @@
   },
   "dependencies": {
     "@fontsource-variable/geist-mono": "^5.2.7"
-  }
+  },
+  "repository": "https://github.com/ieedan/bizi",
+  "homepage": "https://getbizi.dev"
 }

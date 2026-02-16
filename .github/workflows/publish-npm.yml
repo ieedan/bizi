@@ -47,7 +47,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish server crate
-        run: cargo publish -p bizi-server --locked
+        run: cargo publish -p bizi-server
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
 
