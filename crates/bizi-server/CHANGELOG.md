@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7](https://github.com/ieedan/bizi/compare/server-v0.2.6...server-v0.2.7) (2026-02-16)
+
+
+### Bug Fixes
+
+* **server:** Windows fixes ([0b200ce](https://github.com/ieedan/bizi/commit/0b200ce48fec22857b6ae9fe7e1895ce571e951a))
+
 ## [0.2.6](https://github.com/ieedan/bizi/compare/server-v0.2.5...server-v0.2.6) (2026-02-16)
 
 
