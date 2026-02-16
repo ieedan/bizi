@@ -27,6 +27,48 @@ Or from a clone: `./scripts/uninstall`
 
 ---
 
+## Releasing with commits
+
+Releases are automated with release-please from commits merged into `main`.
+
+### 1) Use Conventional Commits
+
+Examples:
+
+- `feat(server): add task retry policy`
+- `fix(client): handle 429 responses`
+- `feat(tui): add command palette`
+
+Version bump behavior:
+
+- `fix` -> patch
+- `feat` -> minor
+- `!` or `BREAKING CHANGE:` -> major
+
+### 2) Merge to `main`
+
+When relevant commits land on `main`, release-please updates or opens a release PR.  
+Merging that release PR creates component tags and GitHub releases.
+
+### 3) What gets released
+
+- **Server** (`server` component)
+  - Tag: `server-vX.Y.Z`
+  - GitHub release is created, then server binaries are attached by the server asset workflow.
+- **Client JS** (`client` component)
+  - Released independently when `packages/client-js` changes.
+  - Published to npm with `npm publish --provenance`.
+- **TUI packages** (`tui` and platform packages)
+  - Linked versions: if any TUI package changes, all TUI packages release together.
+  - All TUI npm packages publish together with `--provenance`.
+
+### Notes
+
+- Non-server releases create GitHub releases without binary assets.
+- npm publishing uses trusted publishing (OIDC) and latest npm CLI.
+
+---
+
 ## TODO
 
 - [ ] Figure out what the log retention / run retention policy should be
