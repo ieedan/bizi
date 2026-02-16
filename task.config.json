@@ -8,10 +8,10 @@
           "command": "cargo run -- --port 3000"
         },
         "generate": {
-          "command": "bun tsx scripts/generate.ts"
+          "command": "pnpm tsx scripts/generate.ts"
         },
         "packages": {
-          "command": "bun run --filter './packages/*' dev",
+          "command": "pnpm --filter './packages/*' dev",
           "dependsOn": ["dev:generate"]
         }
       }
@@ -19,7 +19,7 @@
     "format": {
       "tasks": {
         "ultracite": {
-          "command": "bun ultracite fix"
+          "command": "pnpm ultracite fix"
         },
         "cargo": {
           "command": "cargo fmt"
@@ -30,7 +30,7 @@
       "dependsOn": ["format"],
       "tasks": {
         "ultracite": {
-          "command": "bun ultracite check"
+          "command": "pnpm ultracite check"
         },
         "cargo": {
           "command": "cargo check"
@@ -38,7 +38,7 @@
       }
     },
     "generate": {
-      "command": "bun tsx scripts/generate.ts"
+      "command": "pnpm tsx scripts/generate.ts"
     }
   }
 }

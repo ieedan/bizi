@@ -4,13 +4,9 @@
   "homepage": "https://getbizi.dev",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.2.13",
-  "workspaces": [
-    "apps/**",
-    "packages/**"
-  ],
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
-    "generate:clients": "bun run --filter './packages/client-*' generate",
+    "generate:clients": "pnpm --filter './packages/client-*' generate",
     "check": "ultracite check",
     "fix": "ultracite fix"
   },
