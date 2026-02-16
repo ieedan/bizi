@@ -112,6 +112,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build client package
+        run: bun --cwd packages/client-js build
+
       - name: Build TUI artifacts for npm packages
         run: |
           bun --cwd apps/tui compile:all
