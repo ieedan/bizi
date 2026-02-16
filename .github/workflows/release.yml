@@ -45,7 +45,6 @@ jobs:
           path: bizi-server-x86_64-apple-darwin
 
   build-windows:
-    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v'))
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +78,6 @@ jobs:
           path: bizi-server-aarch64-pc-windows-msvc.exe
 
   release:
-    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v'))
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     permissions:
