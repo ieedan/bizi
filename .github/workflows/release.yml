@@ -5,13 +5,17 @@ on:
     tags:
       - 'server-v*'
   create:
+  release:
+    types: [published]
 
 jobs:
   build-macos:
-    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v'))
+    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v')) || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'server-v'))
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -45,10 +49,12 @@ jobs:
           path: bizi-server-x86_64-apple-darwin
 
   build-windows:
-    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v'))
+    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v')) || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'server-v'))
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && format('refs/tags/{0}', github.event.release.tag_name) || github.ref }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -79,7 +85,7 @@ jobs:
           path: bizi-server-aarch64-pc-windows-msvc.exe
 
   release:
-    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v'))
+    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v')) || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'server-v'))
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     permissions:
@@ -104,7 +110,7 @@ jobs:
       - name: Upload server artifacts to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
           files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
