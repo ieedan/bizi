@@ -1,6 +1,6 @@
 [package]
 name = "bizi-server"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 description = "Task runner server for the bizi project"
 repository = "https://github.com/ieedan/bizi"
