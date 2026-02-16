@@ -38,7 +38,15 @@ jobs:
           PATHS_RELEASED: ${{ needs.release-please.outputs.paths_released }}
         with:
           script: |
-            const paths = JSON.parse(process.env.PATHS_RELEASED || '[]');
+            const paths = [
+              'crates/bizi-server',
+              'packages/client-js',
+              'apps/tui',
+              'apps/tui/packages/bizi-darwin-arm64',
+              'apps/tui/packages/bizi-darwin-x64',
+              'apps/tui/packages/bizi-win32-x64',
+              'apps/tui/packages/bizi-win32-arm64'
+            ];
             await github.rest.repos.createDispatchEvent({
               owner: context.repo.owner,
               repo: context.repo.repo,
