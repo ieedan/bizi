@@ -131,25 +131,56 @@ export async function runCommand(
 		return emittedCount;
 	};
 
-	const finalizeWithStatus = async (status: TaskRunTreeNode["status"]) => {
+	const finalizeWhenTaskTreeSettles = async (snapshot: TaskRunTreeNode) => {
 		if (terminalFinalizing || settled) {
+			return;
+		}
+		if (!isTerminalRunStatus(snapshot.status)) {
 			return;
 		}
 		terminalFinalizing = true;
 		try {
-			// Give logs a brief chance to catch up in storage after terminal status.
+			let latestSnapshot = snapshot;
+			// Child runs can be created shortly after a parent turns terminal,
+			// so re-check the full tree before deciding to exit.
 			for (let attempt = 0; attempt < 4; attempt += 1) {
-				await flushAggregatedLogs();
+				if (hasActiveRunsInTaskTree(latestSnapshot)) {
+					return;
+				}
 				if (attempt === 3) {
 					break;
 				}
 				await wait(180);
+				const latestRun = await deps.getTaskRun(runId);
+				if (
+					latestRun.data &&
+					!latestRun.error &&
+					isTaskRunMessage(latestRun.data)
+				) {
+					latestSnapshot = latestRun.data.taskRun;
+				}
 			}
-		} catch {
-			// Best-effort flush; status-based exit should still continue.
+			if (hasActiveRunsInTaskTree(latestSnapshot)) {
+				return;
+			}
+			try {
+				// Give logs a brief chance to catch up in storage after task tree settles.
+				for (let attempt = 0; attempt < 4; attempt += 1) {
+					await flushAggregatedLogs();
+					if (attempt === 3) {
+						break;
+					}
+					await wait(180);
+				}
+			} catch {
+				// Best-effort flush; status-based exit should still continue.
+			}
+			const exitCode =
+				signalExitCode ?? taskRunStatusExitCode(latestSnapshot.status);
+			complete(exitCode);
+		} finally {
+			terminalFinalizing = false;
 		}
-		const exitCode = signalExitCode ?? taskRunStatusExitCode(status);
-		complete(exitCode);
 	};
 
 	const logSocket = deps.subscribeTaskLogs(
@@ -183,7 +214,7 @@ export async function runCommand(
 			if (!isTerminalRunStatus(payload.taskRun.status)) {
 				return;
 			}
-			finalizeWithStatus(payload.taskRun.status).catch(() => {
+			finalizeWhenTaskTreeSettles(payload.taskRun).catch(() => {
 				const exitCode =
 					signalExitCode ??
 					taskRunStatusExitCode(payload.taskRun.status);
@@ -211,7 +242,7 @@ export async function runCommand(
 				if (!isTerminalRunStatus(latestRun.data.taskRun.status)) {
 					return;
 				}
-				return finalizeWithStatus(latestRun.data.taskRun.status);
+				return finalizeWhenTaskTreeSettles(latestRun.data.taskRun);
 			})
 			.catch(() => undefined);
 	}, 500);
@@ -361,4 +392,11 @@ function isTaskRunLogsResponse(data: unknown): data is {
 
 function wait(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function hasActiveRunsInTaskTree(run: TaskRunTreeNode): boolean {
+	if (run.status === "Queued" || run.status === "Running") {
+		return true;
+	}
+	return run.children.some((childRun) => hasActiveRunsInTaskTree(childRun));
 }
