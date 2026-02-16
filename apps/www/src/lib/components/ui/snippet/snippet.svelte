@@ -1,29 +1,27 @@
 <script lang="ts" module>
-	import { cn } from '$lib/utils.js';
-	import { tv, type VariantProps } from 'tailwind-variants';
-	import { CopyButton } from '../copy-button';
-	import type { UseClipboard } from '$lib/hooks/use-clipboard.svelte';
+import { tv, type VariantProps } from "tailwind-variants";
+import type { UseClipboard } from "$lib/hooks/use-clipboard.svelte";
 
-	const style = tv({
-		base: 'bg-background relative w-full max-w-full rounded-md border py-2.5 pr-12 pl-3',
-		variants: {
-			variant: {
-				default: 'border-border bg-card',
-				secondary: 'border-border bg-accent',
-				destructive: 'border-destructive bg-destructive',
-				primary: 'border-primary bg-primary text-primary-foreground'
-			}
-		}
-	});
+const style = tv({
+	base: "relative w-full max-w-full rounded-md border bg-background py-2.5 pr-12 pl-3",
+	variants: {
+		variant: {
+			default: "border-border bg-card",
+			secondary: "border-border bg-accent",
+			destructive: "border-destructive bg-destructive",
+			primary: "border-primary bg-primary text-primary-foreground",
+		},
+	},
+});
 
-	type Variant = VariantProps<typeof style>['variant'];
+type Variant = VariantProps<typeof style>["variant"];
 
-	export type SnippetProps = {
-		variant?: Variant;
-		text: string | string[];
-		class?: string;
-		onCopy?: (status: UseClipboard['status']) => void;
-	};
+export type SnippetProps = {
+	variant?: Variant;
+	text: string | string[];
+	class?: string;
+	onCopy?: (status: UseClipboard["status"]) => void;
+};
 </script>
 
 <script lang="ts">

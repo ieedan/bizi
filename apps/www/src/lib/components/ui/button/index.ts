@@ -1,12 +1,12 @@
 import Root, {
-	type ButtonProps,
-	type ButtonSize,
-	type ButtonVariant,
 	type AnchorElementProps,
 	type ButtonElementProps,
+	type ButtonProps,
 	type ButtonPropsWithoutHTML,
-	buttonVariants
-} from '$lib/components/ui/button/button.svelte';
+	type ButtonSize,
+	type ButtonVariant,
+	buttonVariants,
+} from "$lib/components/ui/button/button.svelte";
 
 export {
 	Root,
@@ -19,5 +19,5 @@ export {
 	type ButtonVariant,
 	type AnchorElementProps,
 	type ButtonElementProps,
-	type ButtonPropsWithoutHTML
+	type ButtonPropsWithoutHTML,
 };
