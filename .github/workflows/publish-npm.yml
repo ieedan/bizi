@@ -123,11 +123,14 @@ jobs:
           cargo build -p bizi-server --release --target aarch64-pc-windows-msvc &
           wait
 
+      - name: Rename and upload x86_64
+        run: Copy-Item target/x86_64-pc-windows-msvc/release/bizi-server.exe bizi-server-x86_64-pc-windows-msvc.exe
+        shell: pwsh
       - name: Upload x86_64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: bizi-server-x86_64-pc-windows-msvc.exe
-          path: target/x86_64-pc-windows-msvc/release/bizi-server.exe
+          path: bizi-server-x86_64-pc-windows-msvc.exe
 
       - name: Rename and upload aarch64
         run: Copy-Item target/aarch64-pc-windows-msvc/release/bizi-server.exe bizi-server-aarch64-pc-windows-msvc.exe
