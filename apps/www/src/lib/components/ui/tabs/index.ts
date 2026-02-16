@@ -1,16 +1,17 @@
-import Root from "$lib/components/ui/tabs/tabs.svelte";
-import Content from "$lib/components/ui/tabs/tabs-content.svelte";
-import List from "$lib/components/ui/tabs/tabs-list.svelte";
-import Trigger from "$lib/components/ui/tabs/tabs-trigger.svelte";
-
+// biome-ignore lint/performance/noBarrelFile: component library public API
 export {
-	Root,
-	Content,
-	List,
-	Trigger,
-	//
-	Root as Tabs,
-	Content as TabsContent,
-	List as TabsList,
-	Trigger as TabsTrigger,
-};
+	default as Root,
+	default as Tabs,
+} from "$lib/components/ui/tabs/tabs.svelte";
+export {
+	default as Content,
+	default as TabsContent,
+} from "$lib/components/ui/tabs/tabs-content.svelte";
+export {
+	default as List,
+	default as TabsList,
+} from "$lib/components/ui/tabs/tabs-list.svelte";
+export {
+	default as Trigger,
+	default as TabsTrigger,
+} from "$lib/components/ui/tabs/tabs-trigger.svelte";

@@ -1,11 +1,11 @@
 <script lang="ts">
-import type { Tabs as TabsPrimitive } from "bits-ui";
+	import type { Tabs as TabsPrimitive } from "bits-ui";
 
-const {
-	ref = $bindable(null),
-	class: className,
-	...restProps
-}: TabsPrimitive.ContentProps = $props();
+	const {
+		ref = $bindable(null),
+		class: className,
+		...restProps
+	}: TabsPrimitive.ContentProps = $props();
 </script>
 
 <TabsPrimitive.Content
