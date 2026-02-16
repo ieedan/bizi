@@ -1,3 +1,5 @@
+https://github.com/user-attachments/assets/5478763d-57c5-4201-8ee7-a4e6239a8bcf
+
 # bizi
 
 bizi is a better way to manage dependent concurrent tasks.
