@@ -13,7 +13,7 @@ interface TargetConfig {
 
 const targetConfigs: TargetConfig[] = [
 	{
-		id: "darwin-arm64",
+		id: 'darwin-arm64',
 		bunTarget: "bun-darwin-arm64",
 		openTuiCorePackage: "@opentui/core-darwin-arm64",
 		outputPath: "../packages/bizi-darwin-arm64/bin/bizi",
