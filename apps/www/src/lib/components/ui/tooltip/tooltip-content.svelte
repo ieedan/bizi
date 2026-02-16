@@ -1,7 +1,8 @@
 <script lang="ts">
-	import type { Tooltip as TooltipPrimitive } from "bits-ui";
+	import { cn } from "$lib/utils";
+	import { Tooltip as TooltipPrimitive } from "bits-ui";
 
-	const {
+	let {
 		ref = $bindable(null),
 		class: className,
 		sideOffset = 0,

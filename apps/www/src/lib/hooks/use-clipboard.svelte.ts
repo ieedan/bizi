@@ -1,7 +1,7 @@
-interface Options {
+type Options = {
 	/** The time before the copied status is reset. */
 	delay: number;
-}
+};
 
 /** Use this hook to copy text to the clipboard and show a copied state.
  *
@@ -26,8 +26,8 @@ interface Options {
  *
  */
 export class UseClipboard {
-	#copiedStatus = $state<"success" | "failure">();
-	private readonly delay: number;
+	#copiedStatus = $state<'success' | 'failure'>();
+	private delay: number;
 	private timeout: ReturnType<typeof setTimeout> | undefined = undefined;
 
 	constructor({ delay = 500 }: Partial<Options> = {}) {
@@ -61,7 +61,7 @@ export class UseClipboard {
 
 	/** true when the user has just copied to the clipboard. */
 	get copied() {
-		return this.#copiedStatus === "success";
+		return this.#copiedStatus === 'success';
 	}
 
 	/**	Indicates whether a copy has occurred
@@ -71,29 +71,29 @@ export class UseClipboard {
 	}
 }
 
-export async function copyText(text: string): Promise<"success" | "failure"> {
+export async function copyText(text: string): Promise<'success' | 'failure'> {
 	try {
 		if (navigator.clipboard && window.isSecureContext) {
 			await navigator.clipboard.writeText(text);
-			return "success";
+			return 'success';
 		}
 
 		// when navigator.clipboard is unavailable we fallback to this for wider browser compatibility
-		const textArea = document.createElement("textarea");
+		const textArea = document.createElement('textarea');
 		textArea.value = text;
-		textArea.style.position = "fixed";
-		textArea.style.top = "0";
-		textArea.style.left = "0";
+		textArea.style.position = 'fixed';
+		textArea.style.top = '0';
+		textArea.style.left = '0';
 		document.body.appendChild(textArea);
 		textArea.focus();
 		textArea.select();
 
-		const successful = document.execCommand("copy");
+		const successful = document.execCommand('copy');
 
 		document.body.removeChild(textArea);
 
-		return successful ? "success" : "failure";
+		return successful ? 'success' : 'failure';
 	} catch {
-		return "failure";
+		return 'failure';
 	}
 }

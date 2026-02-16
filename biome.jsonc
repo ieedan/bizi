@@ -8,5 +8,8 @@
   "formatter": {
     "indentStyle": "tab",
     "indentWidth": 4
+  },
+  "files": {
+    "includes": ["!apps/www/**/*.svelte"]
   }
 }

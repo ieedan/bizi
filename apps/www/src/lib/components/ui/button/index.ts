@@ -1,7 +1,17 @@
-// biome-ignore lint/performance/noBarrelFile: component library public API
+import Root, {
+	type ButtonProps,
+	type ButtonSize,
+	type ButtonVariant,
+	type AnchorElementProps,
+	type ButtonElementProps,
+	type ButtonPropsWithoutHTML,
+	buttonVariants
+} from '$lib/components/ui/button/button.svelte';
+
 export {
 	Root,
 	type ButtonProps as Props,
+	//
 	Root as Button,
 	buttonVariants,
 	type ButtonProps,
@@ -9,5 +19,5 @@ export {
 	type ButtonVariant,
 	type AnchorElementProps,
 	type ButtonElementProps,
-	type ButtonPropsWithoutHTML,
-} from "$lib/components/ui/button/button.svelte";
+	type ButtonPropsWithoutHTML
+};

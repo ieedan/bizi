@@ -1,7 +1,9 @@
 <script lang="ts">
+	import favicon from "$lib/assets/favicon.svg";
+	import '@fontsource-variable/geist-mono';
 	import "./layout.css";
 
-	const { children } = $props();
+	let { children } = $props();
 </script>
 
 <svelte:head>

@@ -33,6 +33,28 @@ Currently the only client is the TUI.
 pnpm install -g bizi
 ```
 
+### Setup your task.config.json
+
+```jsonc
+{
+  "$schema": "https://getbizi.dev/schemas/task.config.json",
+  "tasks": {
+    "dev": {
+      "tasks": {
+        "api": {
+          "cwd": "./apps/api",
+          "command": "dotnet run"
+        },
+        "site": {
+          "cwd": "./apps/site",
+          "command": "pnpm dev"
+        },
+      }
+    },
+  }
+}
+```
+
 ### Use the client
 
 Start the TUI from your project directory (where your `task.config.json` is):

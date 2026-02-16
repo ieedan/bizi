@@ -26,6 +26,7 @@
 
 <script lang="ts">
 	import { cn } from "$lib/utils.js";
+	import { CopyButton } from "../copy-button";
 
 	let {
 		text,
