@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/ieedan/bizi/compare/tui-darwin-arm64-v0.2.0...tui-darwin-arm64-v0.2.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* **tui:** formatting ([6650335](https://github.com/ieedan/bizi/commit/665033552b4a28ab8421d7b1d5123b750501c05a))
+
 ## [0.1.0](https://github.com/ieedan/bizi/compare/tui-darwin-arm64-v0.0.3...tui-darwin-arm64-v0.1.0) (2026-02-16)
 
 
