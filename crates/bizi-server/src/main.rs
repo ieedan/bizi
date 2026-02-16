@@ -1,4 +1,3 @@
-// Main entry point for bizi-server
 use bizi_server::api::{create_app_state, create_router, tasks};
 use bizi_server::db::{connect_sqlite, run_migrations};
 use clap::Parser;
