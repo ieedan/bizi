@@ -131,6 +131,18 @@ export async function runCommand(
 		return emittedCount;
 	};
 
+	const loadLatestTaskRunTree = async (): Promise<TaskRunTreeNode | null> => {
+		const latestRun = await deps.getTaskRun(runId);
+		if (
+			!latestRun.data ||
+			latestRun.error ||
+			!isTaskRunMessage(latestRun.data)
+		) {
+			return null;
+		}
+		return latestRun.data.taskRun;
+	};
+
 	const finalizeWhenTaskTreeSettles = async (snapshot: TaskRunTreeNode) => {
 		if (terminalFinalizing || settled) {
 			return;
@@ -140,43 +152,16 @@ export async function runCommand(
 		}
 		terminalFinalizing = true;
 		try {
-			let latestSnapshot = snapshot;
-			// Child runs can be created shortly after a parent turns terminal,
-			// so re-check the full tree before deciding to exit.
-			for (let attempt = 0; attempt < 4; attempt += 1) {
-				if (hasActiveRunsInTaskTree(latestSnapshot)) {
-					return;
-				}
-				if (attempt === 3) {
-					break;
-				}
-				await wait(180);
-				const latestRun = await deps.getTaskRun(runId);
-				if (
-					latestRun.data &&
-					!latestRun.error &&
-					isTaskRunMessage(latestRun.data)
-				) {
-					latestSnapshot = latestRun.data.taskRun;
-				}
-			}
-			if (hasActiveRunsInTaskTree(latestSnapshot)) {
+			const settledSnapshot = await waitForTerminalTaskTreeToSettle(
+				snapshot,
+				loadLatestTaskRunTree
+			);
+			if (!settledSnapshot) {
 				return;
 			}
-			try {
-				// Give logs a brief chance to catch up in storage after task tree settles.
-				for (let attempt = 0; attempt < 4; attempt += 1) {
-					await flushAggregatedLogs();
-					if (attempt === 3) {
-						break;
-					}
-					await wait(180);
-				}
-			} catch {
-				// Best-effort flush; status-based exit should still continue.
-			}
+			await flushRunLogsWithRetries(flushAggregatedLogs);
 			const exitCode =
-				signalExitCode ?? taskRunStatusExitCode(latestSnapshot.status);
+				signalExitCode ?? taskRunStatusExitCode(settledSnapshot.status);
 			complete(exitCode);
 		} finally {
 			terminalFinalizing = false;
@@ -399,4 +384,44 @@ function hasActiveRunsInTaskTree(run: TaskRunTreeNode): boolean {
 		return true;
 	}
 	return run.children.some((childRun) => hasActiveRunsInTaskTree(childRun));
+}
+
+async function waitForTerminalTaskTreeToSettle(
+	initialSnapshot: TaskRunTreeNode,
+	loadLatestTaskRunTree: () => Promise<TaskRunTreeNode | null>
+): Promise<TaskRunTreeNode | null> {
+	let latestSnapshot = initialSnapshot;
+	// Child runs can be created shortly after a parent turns terminal,
+	// so re-check the full tree before deciding to exit.
+	for (let attempt = 0; attempt < 4; attempt += 1) {
+		if (hasActiveRunsInTaskTree(latestSnapshot)) {
+			return null;
+		}
+		if (attempt === 3) {
+			break;
+		}
+		await wait(180);
+		const refreshedSnapshot = await loadLatestTaskRunTree();
+		if (refreshedSnapshot) {
+			latestSnapshot = refreshedSnapshot;
+		}
+	}
+	return hasActiveRunsInTaskTree(latestSnapshot) ? null : latestSnapshot;
+}
+
+async function flushRunLogsWithRetries(
+	flushAggregatedLogs: () => Promise<number>
+): Promise<void> {
+	try {
+		// Give logs a brief chance to catch up in storage after task tree settles.
+		for (let attempt = 0; attempt < 4; attempt += 1) {
+			await flushAggregatedLogs();
+			if (attempt === 3) {
+				break;
+			}
+			await wait(180);
+		}
+	} catch {
+		// Best-effort flush; status-based exit should still continue.
+	}
 }
