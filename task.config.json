@@ -4,7 +4,7 @@
     "dev": {
       "tasks": {
         "server": {
-          "cwd": "./services/server",
+          "cwd": "./crates/bizi-server",
           "command": "cargo run -- --port 3000"
         },
         "generate": {

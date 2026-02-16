@@ -1,9 +1,9 @@
-name: Release
+name: Release Server Assets
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'server-v*'
 
 jobs:
   build-macos:
@@ -18,8 +18,8 @@ jobs:
 
       - name: Build (aarch64-apple-darwin, x86_64-apple-darwin)
         run: |
-          cargo build -p server --release --target aarch64-apple-darwin &
-          cargo build -p server --release --target x86_64-apple-darwin &
+          cargo build -p bizi-server --release --target aarch64-apple-darwin &
+          cargo build -p bizi-server --release --target x86_64-apple-darwin &
           wait
 
       - name: Rename and upload aarch64
@@ -55,8 +55,8 @@ jobs:
       - name: Build (x86_64-pc-windows-msvc, aarch64-pc-windows-msvc)
         shell: bash
         run: |
-          cargo build -p server --release --target x86_64-pc-windows-msvc &
-          cargo build -p server --release --target aarch64-pc-windows-msvc &
+          cargo build -p bizi-server --release --target x86_64-pc-windows-msvc &
+          cargo build -p bizi-server --release --target aarch64-pc-windows-msvc &
           wait
 
       - name: Upload x86_64 artifact
@@ -75,94 +75,8 @@ jobs:
           name: bizi-server-aarch64-pc-windows-msvc.exe
           path: bizi-server-aarch64-pc-windows-msvc.exe
 
-  build-tui:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.2.13
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Compile TUI release binaries
-        run: bun --cwd apps/tui compile:all
-
-      - name: Upload TUI darwin arm64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bizi-darwin-arm64
-          path: apps/tui/packages/bizi-darwin-arm64/bin/bizi
-
-      - name: Upload TUI darwin x64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bizi-darwin-x64
-          path: apps/tui/packages/bizi-darwin-x64/bin/bizi
-
-      - name: Upload TUI win32 x64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bizi-win32-x64.exe
-          path: apps/tui/packages/bizi-win32-x64/bin/bizi.exe
-
-      - name: Upload TUI win32 arm64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bizi-win32-arm64.exe
-          path: apps/tui/packages/bizi-win32-arm64/bin/bizi.exe
-
-  publish-tui-packages:
-    needs: [build-tui]
-    if: ${{ secrets.NPM_TOKEN != '' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.2.13
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Download TUI artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-
-      - name: Place compiled binaries into platform packages
-        run: |
-          mkdir -p apps/tui/packages/bizi-darwin-arm64/bin apps/tui/packages/bizi-darwin-x64/bin
-          mkdir -p apps/tui/packages/bizi-win32-x64/bin apps/tui/packages/bizi-win32-arm64/bin
-          cp artifacts/bizi-darwin-arm64/bizi apps/tui/packages/bizi-darwin-arm64/bin/bizi
-          cp artifacts/bizi-darwin-x64/bizi apps/tui/packages/bizi-darwin-x64/bin/bizi
-          cp artifacts/bizi-win32-x64.exe/bizi.exe apps/tui/packages/bizi-win32-x64/bin/bizi.exe
-          cp artifacts/bizi-win32-arm64.exe/bizi.exe apps/tui/packages/bizi-win32-arm64/bin/bizi.exe
-
-      - name: Configure npm auth
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish platform packages first
-        run: |
-          npm publish ./apps/tui/packages/bizi-darwin-arm64 --access public
-          npm publish ./apps/tui/packages/bizi-darwin-x64 --access public
-          npm publish ./apps/tui/packages/bizi-win32-x64 --access public
-          npm publish ./apps/tui/packages/bizi-win32-arm64 --access public
-
-      - name: Publish main CLI package
-        run: npm publish ./apps/tui --access public
-
   release:
-    needs: [build-macos, build-windows, build-tui]
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,18 +95,11 @@ jobs:
                    bizi-server-aarch64-pc-windows-msvc.exe/bizi-server-aarch64-pc-windows-msvc.exe; do
             [ -f "$f" ] && cp "$f" release/
           done
-          for f in bizi-darwin-arm64/bizi \
-                   bizi-darwin-x64/bizi \
-                   bizi-win32-x64.exe/bizi.exe \
-                   bizi-win32-arm64.exe/bizi.exe; do
-            [ -f "$f" ] && cp "$f" release/
-          done
           ls -la release/
 
-      - name: Create GitHub Release
+      - name: Upload server artifacts to release
         uses: softprops/action-gh-release@v2
         with:
           files: release/*
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

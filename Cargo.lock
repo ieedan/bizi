@@ -228,6 +228,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 
 [[package]]
+name = "bizi-server"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "clap",
+ "futures-util",
+ "libc",
+ "nanoid",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "utoipa",
+ "utoipa-swagger-ui",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1961,27 +1982,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "chrono",
- "clap",
- "futures-util",
- "libc",
- "nanoid",
- "sea-orm",
- "sea-orm-migration",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "utoipa",
- "utoipa-swagger-ui",
 ]
 
 [[package]]

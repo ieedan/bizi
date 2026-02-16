@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "include-component-in-tag": true,
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "tui",
+      "components": [
+        "tui",
+        "tui-darwin-arm64",
+        "tui-darwin-x64",
+        "tui-win32-x64",
+        "tui-win32-arm64"
+      ]
+    }
+  ],
+  "packages": {
+    "crates/bizi-server": {
+      "release-type": "rust",
+      "component": "server"
+    },
+    "packages/client-js": {
+      "release-type": "node",
+      "component": "client"
+    },
+    "apps/tui": {
+      "release-type": "node",
+      "component": "tui"
+    },
+    "apps/tui/packages/bizi-darwin-arm64": {
+      "release-type": "node",
+      "component": "tui-darwin-arm64"
+    },
+    "apps/tui/packages/bizi-darwin-x64": {
+      "release-type": "node",
+      "component": "tui-darwin-x64"
+    },
+    "apps/tui/packages/bizi-win32-x64": {
+      "release-type": "node",
+      "component": "tui-win32-x64"
+    },
+    "apps/tui/packages/bizi-win32-arm64": {
+      "release-type": "node",
+      "component": "tui-win32-arm64"
+    }
+  }
+}
