@@ -399,7 +399,7 @@ function App() {
 			clearTaskSearch();
 			return true;
 		}
-		if (key.name === 'enter' || key.name === "return") {
+		if (key.name === "enter" || key.name === "return") {
 			handleTaskSearchSubmit();
 			return true;
 		}
