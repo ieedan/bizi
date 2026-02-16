@@ -1232,10 +1232,16 @@ async fn run_command(
             command_builder.env("HOME", home);
         }
     }
+    // Signal to shell and child processes that no interactive TTY is available.
+    command_builder.env("TERM", "dumb");
+    command_builder.env("CI", "true");
+    #[cfg(windows)]
+    command_builder.arg("/c").arg(command.as_str());
+    #[cfg(not(windows))]
+    command_builder.arg("-lc").arg(command.as_str());
     command_builder
-        .arg("-lc")
-        .arg(command.as_str())
         .current_dir(&resolved_cwd)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     #[cfg(unix)]
@@ -1351,20 +1357,22 @@ fn resolve_command_cwd(cwd: &str) -> PathBuf {
 }
 
 fn resolve_command_shell() -> std::ffi::OsString {
-    if let Some(shell) = std::env::var_os("SHELL") {
-        if !shell.is_empty() {
-            return shell;
+    #[cfg(target_os = "windows")]
+    return std::env::var_os("COMSPEC").unwrap_or_else(|| "cmd.exe".into());
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(shell) = std::env::var_os("SHELL") {
+            if !shell.is_empty() {
+                return shell;
+            }
         }
-    }
 
-    #[cfg(target_os = "macos")]
-    {
+        #[cfg(target_os = "macos")]
         return "/bin/zsh".into();
-    }
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        "sh".into()
+        #[cfg(not(target_os = "macos"))]
+        return "sh".into();
     }
 }
 
