@@ -64,7 +64,7 @@ async function main(): Promise<void> {
 
 	try {
 		await waitForOpenApi();
-		await run("bun", ["run", "generate:clients"]);
+		await run("pnpm", ["run", "generate:clients"]);
 	} finally {
 		cleanup();
 	}

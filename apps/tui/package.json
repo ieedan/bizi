@@ -21,8 +21,7 @@
     "compile:darwin-x64": "bun run scripts/build.ts compile darwin-x64",
     "compile:win32-x64": "bun run scripts/build.ts compile windows-x64",
     "compile:win32-arm64": "bun run scripts/build.ts compile windows-arm64",
-    "compile:all": "bun run scripts/build.ts compile-all",
-    "pack": "bun run compile:all && bun run build:bundle && bun run compile:all && bun pm pack"
+    "compile:all": "bun run scripts/build.ts compile-all"
   },
   "optionalDependencies": {
     "@getbizi/bizi-darwin-arm64": "workspace:*",
@@ -50,4 +49,3 @@
     "zod": "^4.3.6"
   }
 }
-
