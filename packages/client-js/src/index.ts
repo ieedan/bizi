@@ -40,7 +40,7 @@ export type TaskRunLogsStreamMessage =
 	| TaskRunLogsLogMessage
 	| TaskRunLogsErrorMessage;
 
-export function createTaskRunnerClient({
+export function createBiziClient({
 	port = 7436,
 	host = "localhost",
 }: Partial<ClientOptions> = {}) {
@@ -49,8 +49,8 @@ export function createTaskRunnerClient({
 	});
 }
 
-export function createTaskRunnerApi(options: Partial<ClientOptions> = {}) {
-	const client = createTaskRunnerClient(options);
+export function createBiziApi(options: Partial<ClientOptions> = {}) {
+	const client = createBiziClient(options);
 	const { port = 7436, host = "localhost" } = options;
 
 	return {

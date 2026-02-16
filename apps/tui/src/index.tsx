@@ -1,5 +1,5 @@
 import {
-	createTaskRunnerApi,
+	createBiziApi,
 	type Task,
 	type TaskRunLogLine,
 	type TaskRunLogsStreamMessage,
@@ -44,7 +44,7 @@ import {
 } from "./lib/task-structure";
 import type { LogMode } from "./types";
 
-const api = createTaskRunnerApi({ port: 7436 });
+const api = createBiziApi({ port: 7436 });
 const argv = process.argv.slice(2);
 let cliOptions: CliOptions = { cwd: process.cwd() };
 let cwd = cliOptions.cwd;

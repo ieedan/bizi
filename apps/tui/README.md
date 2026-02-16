@@ -1,56 +1,78 @@
-# bizi TUI
+https://github.com/user-attachments/assets/5478763d-57c5-4201-8ee7-a4e6239a8bcf
 
-Install dependencies:
+# bizi
 
-```bash
-bun install
-```
+bizi is a better way to manage dependent concurrent tasks.
 
-Run the server and then start the TUI:
+> [!WARNING]
+> This is still in early development breaking changes are likely. 
 
-```bash
-cargo run -p bizi
-bun --cwd apps/tui dev -- --cwd /path/to/project
-```
+## Why?
 
-If `--cwd` is omitted, the app uses the current shell working directory.
+If you have ever worked in a monorepo with multiple different tasks that depend on each other (for instance running your API in dev and running your web app in dev). Initially you might reach for something like concurrently to run this tasks in parallel. This works great until the moment where you need to restart one of the tasks, at which point you have no choice but to restart both tasks.
 
-## Hotkeys
+This is where bizi comes in. bizi allows you to define concurrent dependent tasks so and run them separately so that you can cancel, and restart them without effecting the other tasks.
 
-- `up/down` or `j/k`: move selection
-- `r`: run selected task
-- `R`: restart selected run
-- `c`: cancel selected run (and descendants)
-- `l`: toggle log mode (`aggregate` vs `selected`)
-- `q` or `Ctrl+C`: quit
+The benefits go beyond just that though... Have you ever had that problem working with llms where they want to run their own dev server? bizi solves this by allowing llms to hook into the logs of your existing dev server run instead of spinning up their own.
 
-## Release packaging
+## Getting Started
 
-- `bun compile` is release-only and is run from CI in `.github/workflows/release.yml`.
-- Local install/dev scripts do not compile binaries, and no lifecycle hooks trigger compile.
-- Publish order in CI:
-  1. compile binaries,
-  2. publish platform packages (`@getbizi/bizi-*`),
-  3. publish main CLI package (`bizi`).
+### Install the server
 
-## Local validation checks
-
-Run from `apps/tui`:
+This will install the server and start it as a background service.
 
 ```bash
-bun run compile:all
+curl -fsSL https://getbizi.dev/install | bash
 ```
 
-Then verify binaries and launcher flow:
+### Install a client
+
+Currently the only client is the TUI.
 
 ```bash
-ls -la ./packages/bizi-darwin-arm64/bin
-ls -la ./packages/bizi-darwin-x64/bin
-ls -la ./packages/bizi-win32-x64/bin
-ls -la ./packages/bizi-win32-arm64/bin
-node ./bin/bizi.js --help
+pnpm install -g bizi
 ```
 
-Notes:
+### Setup your task.config.json
 
-- Windows arm64 currently uses a Windows x64 Bun executable fallback because Bun does not yet emit native Windows arm64 executables.
+```jsonc
+{
+  "$schema": "https://getbizi.dev/schemas/task.config.json",
+  "tasks": {
+    "dev": {
+      "tasks": {
+        "api": {
+          "cwd": "./apps/api",
+          "command": "dotnet run"
+        },
+        "site": {
+          "cwd": "./apps/site",
+          "command": "pnpm dev"
+        },
+      }
+    },
+  }
+}
+```
+
+### Use the client
+
+Start the TUI from your project directory (where your `task.config.json` is):
+
+```bash
+bizi
+```
+
+Or specify a working directory:
+
+```bash
+bizi -cwd /path/to/project
+```
+
+You can also use CLI commands instead of the TUI (Perfect for your agents):
+
+```bash
+bizi run <task>     # Run a task
+bizi cancel <task> # Cancel a running task
+bizi stat <task>   # Show task status
+```
