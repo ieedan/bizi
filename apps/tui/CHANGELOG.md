@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/ieedan/bizi/compare/tui-v0.2.2...tui-v0.2.3) (2026-02-16)
+
+
+### Bug Fixes
+
+* **tui:** fix build ([50f7dc0](https://github.com/ieedan/bizi/commit/50f7dc0bc0d04ee2414f18a03d91342fde5bde1c))
+
 ## [0.2.2](https://github.com/ieedan/bizi/compare/tui-v0.2.1...tui-v0.2.2) (2026-02-16)
 
 
