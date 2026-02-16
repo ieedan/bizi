@@ -2,7 +2,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import solidPlugin from "../../../node_modules/@opentui/solid/scripts/solid-plugin";
+import solidPlugin from "../node_modules/@opentui/solid/scripts/solid-plugin";
 
 interface TargetConfig {
 	id: string;
