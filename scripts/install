@@ -194,20 +194,29 @@ PLIST_XML
 }
 
 # --- Download and install from GitHub Release ---
+# Server releases use tag prefix "server-v" (release-please component).
 install_from_release() {
   if [ -z "$requested_version" ]; then
-    version=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
-    if [ -z "$version" ]; then
-      echo -e "${RED}Failed to get latest release${NC}"
+    releases_json=$(curl -sf "https://api.github.com/repos/${REPO}/releases?per_page=100") || true
+    if [ -z "$releases_json" ]; then
+      echo -e "${RED}Failed to fetch releases from GitHub${NC}"
       exit 1
     fi
-    url="https://github.com/${REPO}/releases/latest/download/${asset_name}"
+    # Find the latest release whose tag is server-v* (list is newest first)
+    tag=$(echo "$releases_json" | grep -o '"tag_name": *"[^"]*"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' | grep '^server-v' | head -1)
+    if [ -z "$tag" ]; then
+      echo -e "${RED}Failed to get latest server release (no server-v* tag found)${NC}"
+      exit 1
+    fi
+    version="${tag#server-v}"
+    url="https://github.com/${REPO}/releases/download/${tag}/${asset_name}"
   else
     version="${requested_version#v}"
-    url="https://github.com/${REPO}/releases/download/v${version}/${asset_name}"
+    tag="server-v${version}"
+    url="https://github.com/${REPO}/releases/download/${tag}/${asset_name}"
     code=$(curl -sI -o /dev/null -w "%{http_code}" "$url")
     if [ "$code" != "200" ]; then
-      echo -e "${RED}Release v${version} or asset ${asset_name} not found${NC}"
+      echo -e "${RED}Release ${tag} or asset ${asset_name} not found${NC}"
       exit 1
     fi
   fi

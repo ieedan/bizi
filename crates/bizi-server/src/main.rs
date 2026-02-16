@@ -3,6 +3,7 @@ use bizi_server::db::{connect_sqlite, run_migrations};
 use clap::Parser;
 use tokio::net::TcpListener;
 
+// trigger release please
 const DATABASE_URL: &str = "sqlite://bizi.db?mode=rwc";
 
 #[derive(Parser, Debug)]
