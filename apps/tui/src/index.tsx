@@ -1,3 +1,4 @@
+// Terminal UI for bizi
 import {
 	createBiziApi,
 	type Task,

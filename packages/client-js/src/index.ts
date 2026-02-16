@@ -1,3 +1,4 @@
+// Client library for bizi service
 import createClient from "openapi-fetch";
 import type { components, paths } from "./api";
 
