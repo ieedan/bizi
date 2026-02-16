@@ -115,7 +115,7 @@ function App() {
 	const canJumpParentTasks = createMemo(() => taskTree().length > 1);
 	const selectedRunAction = createMemo<"run" | "restart">(() => {
 		if (selectedIsSubtask()) {
-			return selectedRun() ? "restart" : "run";
+			return "restart";
 		}
 
 		const run = selectedRun();
@@ -325,10 +325,10 @@ function App() {
 		taskKey: string,
 		depth: number
 	): "run" | "restart" {
-		const run = runByTaskKey().get(taskKey);
 		if (depth > 0) {
-			return run ? "restart" : "run";
+			return "restart";
 		}
+		const run = runByTaskKey().get(taskKey);
 		if (!run) {
 			return "run";
 		}
@@ -354,23 +354,23 @@ function App() {
 		const run = runByTaskKey().get(row.key);
 		if (run) {
 			await restartRunById(run.id);
-		} else {
-			await runTaskByKey(row.key);
+			clearTaskSearch();
+			return;
 		}
-		clearTaskSearch();
+		setErrorMessage(
+			row.depth > 0
+				? "Cannot restart subtask without an existing parent-linked run."
+				: "Cannot restart task because no existing run was found."
+		);
 	}
 
 	function handleTaskSearchSubmit() {
-		const normalizedQuery = taskSearchQuery().trim().toLowerCase();
-		if (!normalizedQuery) {
+		const exactQuery = taskSearchQuery().trim();
+		if (!exactQuery) {
 			setShowTaskSearchError(false);
 			return;
 		}
-		const rowIndex = taskRows().findIndex(
-			(row) =>
-				row.key.toLowerCase() === normalizedQuery ||
-				row.label.toLowerCase() === normalizedQuery
-		);
+		const rowIndex = taskRows().findIndex((row) => row.key === exactQuery);
 		if (rowIndex < 0) {
 			setShowTaskSearchError(true);
 			return;

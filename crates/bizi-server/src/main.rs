@@ -1,6 +1,6 @@
-use clap::Parser;
 use bizi_server::api::{create_app_state, create_router, tasks};
 use bizi_server::db::{connect_sqlite, run_migrations};
+use clap::Parser;
 use tokio::net::TcpListener;
 
 const DATABASE_URL: &str = "sqlite://bizi.db?mode=rwc";
