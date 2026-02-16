@@ -13,7 +13,7 @@ interface TargetConfig {
 
 const targetConfigs: TargetConfig[] = [
 	{
-		id: 'darwin-arm64',
+		id: "darwin-arm64",
 		bunTarget: "bun-darwin-arm64",
 		openTuiCorePackage: "@opentui/core-darwin-arm64",
 		outputPath: "../packages/bizi-darwin-arm64/bin/bizi",
@@ -83,7 +83,7 @@ async function ensureOpenTuiCorePackage(packageName: string) {
 	const corePackageJsonPath = await findPackageJson("@opentui/core");
 	if (!corePackageJsonPath) {
 		throw new Error(
-			`Could not find @opentui/core package.json. Checked:\n` +
+			"Could not find @opentui/core package.json. Checked:\n" +
 				`  - ${join(nodeModulesRoot, "@opentui/core", "package.json")}\n` +
 				`  - ${join(localNodeModulesRoot, "@opentui/core", "package.json")}`
 		);
