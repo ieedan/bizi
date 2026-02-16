@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/ieedan/bizi/compare/tui-v0.2.5...tui-v0.2.6) (2026-02-16)
+
+
+### Bug Fixes
+
+* **tui:** Ensure CLI doesn't exit `run <task>` if tasks aren't done ([#17](https://github.com/ieedan/bizi/issues/17)) ([88c2a5f](https://github.com/ieedan/bizi/commit/88c2a5fb1e9688de902cef79016c0e8ca1d748f9))
+
 ## [0.2.5](https://github.com/ieedan/bizi/compare/tui-v0.2.4...tui-v0.2.5) (2026-02-16)
 
 
