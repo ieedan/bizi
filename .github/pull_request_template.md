@@ -5,7 +5,7 @@
 ## Validations
 
 - [ ] I have run `bun run fix` and `bun run check`.
-- [ ] If I used AI to create this PR beyond simple autocomplete, I have checked this box for responsible disclosure.
+- [ ] If I used AI to create this PR beyond simple autocomplete, I have checked this box for responsible disclosure. <!-- If you have a plan file for this PR consider including it so I can see your thought process -->
 - [ ] If this PR requires a package release, I have titled it using Conventional Commits.
 <!--
 Example:
