@@ -131,25 +131,41 @@ export async function runCommand(
 		return emittedCount;
 	};
 
-	const finalizeWithStatus = async (status: TaskRunTreeNode["status"]) => {
+	const loadLatestTaskRunTree = async (): Promise<TaskRunTreeNode | null> => {
+		const latestRun = await deps.getTaskRun(runId);
+		if (
+			!latestRun.data ||
+			latestRun.error ||
+			!isTaskRunMessage(latestRun.data)
+		) {
+			return null;
+		}
+		return latestRun.data.taskRun;
+	};
+
+	const finalizeWhenTaskTreeSettles = async (snapshot: TaskRunTreeNode) => {
 		if (terminalFinalizing || settled) {
+			return;
+		}
+		if (!isTerminalRunStatus(snapshot.status)) {
 			return;
 		}
 		terminalFinalizing = true;
 		try {
-			// Give logs a brief chance to catch up in storage after terminal status.
-			for (let attempt = 0; attempt < 4; attempt += 1) {
-				await flushAggregatedLogs();
-				if (attempt === 3) {
-					break;
-				}
-				await wait(180);
+			const settledSnapshot = await waitForTerminalTaskTreeToSettle(
+				snapshot,
+				loadLatestTaskRunTree
+			);
+			if (!settledSnapshot) {
+				return;
 			}
-		} catch {
-			// Best-effort flush; status-based exit should still continue.
+			await flushRunLogsWithRetries(flushAggregatedLogs);
+			const exitCode =
+				signalExitCode ?? taskRunStatusExitCode(settledSnapshot.status);
+			complete(exitCode);
+		} finally {
+			terminalFinalizing = false;
 		}
-		const exitCode = signalExitCode ?? taskRunStatusExitCode(status);
-		complete(exitCode);
 	};
 
 	const logSocket = deps.subscribeTaskLogs(
@@ -183,7 +199,7 @@ export async function runCommand(
 			if (!isTerminalRunStatus(payload.taskRun.status)) {
 				return;
 			}
-			finalizeWithStatus(payload.taskRun.status).catch(() => {
+			finalizeWhenTaskTreeSettles(payload.taskRun).catch(() => {
 				const exitCode =
 					signalExitCode ??
 					taskRunStatusExitCode(payload.taskRun.status);
@@ -211,7 +227,7 @@ export async function runCommand(
 				if (!isTerminalRunStatus(latestRun.data.taskRun.status)) {
 					return;
 				}
-				return finalizeWithStatus(latestRun.data.taskRun.status);
+				return finalizeWhenTaskTreeSettles(latestRun.data.taskRun);
 			})
 			.catch(() => undefined);
 	}, 500);
@@ -361,4 +377,51 @@ function isTaskRunLogsResponse(data: unknown): data is {
 
 function wait(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function hasActiveRunsInTaskTree(run: TaskRunTreeNode): boolean {
+	if (run.status === "Queued" || run.status === "Running") {
+		return true;
+	}
+	return run.children.some((childRun) => hasActiveRunsInTaskTree(childRun));
+}
+
+async function waitForTerminalTaskTreeToSettle(
+	initialSnapshot: TaskRunTreeNode,
+	loadLatestTaskRunTree: () => Promise<TaskRunTreeNode | null>
+): Promise<TaskRunTreeNode | null> {
+	let latestSnapshot = initialSnapshot;
+	// Child runs can be created shortly after a parent turns terminal,
+	// so re-check the full tree before deciding to exit.
+	for (let attempt = 0; attempt < 4; attempt += 1) {
+		if (hasActiveRunsInTaskTree(latestSnapshot)) {
+			return null;
+		}
+		if (attempt === 3) {
+			break;
+		}
+		await wait(180);
+		const refreshedSnapshot = await loadLatestTaskRunTree();
+		if (refreshedSnapshot) {
+			latestSnapshot = refreshedSnapshot;
+		}
+	}
+	return hasActiveRunsInTaskTree(latestSnapshot) ? null : latestSnapshot;
+}
+
+async function flushRunLogsWithRetries(
+	flushAggregatedLogs: () => Promise<number>
+): Promise<void> {
+	try {
+		// Give logs a brief chance to catch up in storage after task tree settles.
+		for (let attempt = 0; attempt < 4; attempt += 1) {
+			await flushAggregatedLogs();
+			if (attempt === 3) {
+				break;
+			}
+			await wait(180);
+		}
+	} catch {
+		// Best-effort flush; status-based exit should still continue.
+	}
 }
