@@ -147,18 +147,22 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          merge-multiple: false
 
       - name: Collect release files
         run: |
           mkdir -p release
-          for f in bizi-server-aarch64-apple-darwin/bizi-server-aarch64-apple-darwin \
-                   bizi-server-x86_64-apple-darwin/bizi-server-x86_64-apple-darwin; do
-            [ -f "$f" ] && cp "$f" release/
+          for name in bizi-server-aarch64-apple-darwin bizi-server-x86_64-apple-darwin bizi-server-x86_64-pc-windows-msvc.exe bizi-server-aarch64-pc-windows-msvc.exe; do
+            if [ -f "$name" ]; then
+              cp "$name" release/
+            elif [ -f "$name/$name" ]; then
+              cp "$name/$name" release/
+            else
+              echo "::warning::Artifact not found: $name"
+            fi
           done
-          for f in bizi-server-x86_64-pc-windows-msvc.exe/bizi-server-x86_64-pc-windows-msvc.exe \
-                   bizi-server-aarch64-pc-windows-msvc.exe/bizi-server-aarch64-pc-windows-msvc.exe; do
-            [ -f "$f" ] && cp "$f" release/
-          done
+          echo "Release files:"
           ls -la release/
 
       - name: Upload server artifacts to release
