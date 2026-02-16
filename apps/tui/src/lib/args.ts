@@ -13,7 +13,7 @@ export function parseCliOptions(argv: string[]): CliOptions {
 		.allowUnknownOption(false)
 		.allowExcessArguments(false)
 		.option(
-			"-C, --cwd <path>",
+			'-C, --cwd <path>',
 			"Set working directory for task discovery and runs",
 			process.cwd()
 		);
