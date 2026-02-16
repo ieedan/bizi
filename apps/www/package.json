@@ -1,7 +1,9 @@
 {
   "name": "www",
-  "private": true,
   "version": "0.0.1",
+  "repository": "https://github.com/ieedan/bizi",
+  "homepage": "https://getbizi.dev",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -39,7 +41,5 @@
   },
   "dependencies": {
     "@fontsource-variable/geist-mono": "^5.2.7"
-  },
-  "repository": "https://github.com/ieedan/bizi",
-  "homepage": "https://getbizi.dev"
+  }
 }

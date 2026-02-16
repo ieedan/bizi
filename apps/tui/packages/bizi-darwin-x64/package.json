@@ -2,6 +2,8 @@
   "name": "@getbizi/bizi-darwin-x64",
   "version": "0.1.0",
   "license": "MIT",
+  "repository": "https://github.com/ieedan/bizi",
+  "homepage": "https://getbizi.dev",
   "type": "module",
   "os": [
     "darwin"
@@ -15,7 +17,5 @@
   ],
   "bin": {
     "bizi": "./bin/bizi"
-  },
-  "repository": "https://github.com/ieedan/bizi",
-  "homepage": "https://getbizi.dev"
+  }
 }

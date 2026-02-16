@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "Terminal UI for bizi",
   "license": "MIT",
+  "repository": "https://github.com/ieedan/bizi",
+  "homepage": "https://getbizi.dev",
   "module": "src/index.tsx",
   "type": "module",
   "bin": {
@@ -46,7 +48,5 @@
     "picocolors": "^1.1.1",
     "solid-js": "1.9.9",
     "zod": "^4.3.6"
-  },
-  "repository": "https://github.com/ieedan/bizi",
-  "homepage": "https://getbizi.dev"
+  }
 }

@@ -3,9 +3,9 @@ name = "bizi-server"
 version = "0.0.3"
 edition = "2024"
 description = "Task runner server for the bizi project"
-license = "MIT"
 repository = "https://github.com/ieedan/bizi"
 homepage = "https://getbizi.dev"
+license = "MIT"
 
 [[bin]]
 name = "bizi-server"
