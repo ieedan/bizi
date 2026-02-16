@@ -9,7 +9,6 @@ on:
 
 jobs:
   build-macos:
-    if: github.event_name == 'push' || (github.event_name == 'create' && github.event.ref_type == 'tag' && startsWith(github.event.ref, 'server-v'))
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
