@@ -11,5 +11,17 @@
   },
   "files": {
     "includes": ["!apps/www/**/*.svelte"]
+  },
+  "linter": {
+    "rules": {
+      "performance": {
+        "noNamespaceImport": "off",
+        "noBarrelFile": "off"
+      },
+      "style": {
+        "noExportedImports": "off",
+        "noParameterProperties": "off"
+      }
+    }
   }
 }

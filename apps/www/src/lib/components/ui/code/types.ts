@@ -1,8 +1,8 @@
-import type { WithChildren, WithoutChildren } from 'bits-ui';
-import type { CodeVariant } from '$lib/components/ui/code';
-import type { SupportedLanguage } from '$lib/components/ui/code/shiki';
-import type { HTMLAttributes } from 'svelte/elements';
-import type { CopyButtonPropsWithoutHTML } from '$lib/components/ui/copy-button/types';
+import type { WithChildren, WithoutChildren } from "bits-ui";
+import type { CodeVariant } from "$lib/components/ui/code";
+import type { SupportedLanguage } from "$lib/components/ui/code/shiki";
+import type { HTMLAttributes } from "svelte/elements";
+import type { CopyButtonPropsWithoutHTML } from "$lib/components/ui/copy-button/types";
 
 export type CodeRootPropsWithoutHTML = WithChildren<{
 	ref?: HTMLDivElement | null;
@@ -17,7 +17,10 @@ export type CodeRootPropsWithoutHTML = WithChildren<{
 export type CodeRootProps = CodeRootPropsWithoutHTML &
 	WithoutChildren<HTMLAttributes<HTMLDivElement>>;
 
-export type CodeCopyButtonPropsWithoutHTML = Omit<CopyButtonPropsWithoutHTML, 'text'>;
+export type CodeCopyButtonPropsWithoutHTML = Omit<
+	CopyButtonPropsWithoutHTML,
+	"text"
+>;
 
 export type CodeCopyButtonProps = CodeCopyButtonPropsWithoutHTML &
 	WithoutChildren<HTMLAttributes<HTMLButtonElement>>;
