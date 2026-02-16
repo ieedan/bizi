@@ -95,25 +95,25 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bizi-darwin-arm64
-          path: packages/bizi-darwin-arm64/bin/bizi
+          path: apps/tui/packages/bizi-darwin-arm64/bin/bizi
 
       - name: Upload TUI darwin x64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: bizi-darwin-x64
-          path: packages/bizi-darwin-x64/bin/bizi
+          path: apps/tui/packages/bizi-darwin-x64/bin/bizi
 
       - name: Upload TUI win32 x64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: bizi-win32-x64.exe
-          path: packages/bizi-win32-x64/bin/bizi.exe
+          path: apps/tui/packages/bizi-win32-x64/bin/bizi.exe
 
       - name: Upload TUI win32 arm64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: bizi-win32-arm64.exe
-          path: packages/bizi-win32-arm64/bin/bizi.exe
+          path: apps/tui/packages/bizi-win32-arm64/bin/bizi.exe
 
   publish-tui-packages:
     needs: [build-tui]
@@ -139,12 +139,12 @@ jobs:
 
       - name: Place compiled binaries into platform packages
         run: |
-          mkdir -p packages/bizi-darwin-arm64/bin packages/bizi-darwin-x64/bin
-          mkdir -p packages/bizi-win32-x64/bin packages/bizi-win32-arm64/bin
-          cp artifacts/bizi-darwin-arm64/bizi packages/bizi-darwin-arm64/bin/bizi
-          cp artifacts/bizi-darwin-x64/bizi packages/bizi-darwin-x64/bin/bizi
-          cp artifacts/bizi-win32-x64.exe/bizi.exe packages/bizi-win32-x64/bin/bizi.exe
-          cp artifacts/bizi-win32-arm64.exe/bizi.exe packages/bizi-win32-arm64/bin/bizi.exe
+          mkdir -p apps/tui/packages/bizi-darwin-arm64/bin apps/tui/packages/bizi-darwin-x64/bin
+          mkdir -p apps/tui/packages/bizi-win32-x64/bin apps/tui/packages/bizi-win32-arm64/bin
+          cp artifacts/bizi-darwin-arm64/bizi apps/tui/packages/bizi-darwin-arm64/bin/bizi
+          cp artifacts/bizi-darwin-x64/bizi apps/tui/packages/bizi-darwin-x64/bin/bizi
+          cp artifacts/bizi-win32-x64.exe/bizi.exe apps/tui/packages/bizi-win32-x64/bin/bizi.exe
+          cp artifacts/bizi-win32-arm64.exe/bizi.exe apps/tui/packages/bizi-win32-arm64/bin/bizi.exe
 
       - name: Configure npm auth
         run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
@@ -153,10 +153,10 @@ jobs:
 
       - name: Publish platform packages first
         run: |
-          npm publish ./packages/bizi-darwin-arm64 --access public
-          npm publish ./packages/bizi-darwin-x64 --access public
-          npm publish ./packages/bizi-win32-x64 --access public
-          npm publish ./packages/bizi-win32-arm64 --access public
+          npm publish ./apps/tui/packages/bizi-darwin-arm64 --access public
+          npm publish ./apps/tui/packages/bizi-darwin-x64 --access public
+          npm publish ./apps/tui/packages/bizi-win32-x64 --access public
+          npm publish ./apps/tui/packages/bizi-win32-arm64 --access public
 
       - name: Publish main CLI package
         run: npm publish ./apps/tui --access public

@@ -4,8 +4,8 @@
   "type": "module",
   "packageManager": "bun@1.2.13",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/**",
+    "packages/**"
   ],
   "scripts": {
     "generate:clients": "bun run --filter './packages/client-*' generate",

@@ -19,13 +19,14 @@
     "compile:darwin-x64": "bun run scripts/build.ts compile darwin-x64",
     "compile:win32-x64": "bun run scripts/build.ts compile windows-x64",
     "compile:win32-arm64": "bun run scripts/build.ts compile windows-arm64",
-    "compile:all": "bun run scripts/build.ts compile-all"
+    "compile:all": "bun run scripts/build.ts compile-all",
+    "pack": "bun run compile:all && bun run build:bundle && bun run compile:all && bun pm pack"
   },
   "optionalDependencies": {
-    "@getbizi/bizi-darwin-arm64": "0.0.3",
-    "@getbizi/bizi-darwin-x64": "0.0.3",
-    "@getbizi/bizi-win32-x64": "0.0.3",
-    "@getbizi/bizi-win32-arm64": "0.0.3"
+    "@getbizi/bizi-darwin-arm64": "workspace:*",
+    "@getbizi/bizi-darwin-x64": "workspace:*",
+    "@getbizi/bizi-win32-x64": "workspace:*",
+    "@getbizi/bizi-win32-arm64": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -39,7 +40,7 @@
     "@clack/prompts": "^1.0.1",
     "@opentui/core": "^0.1.79",
     "@opentui/solid": "^0.1.79",
-    "@getbizi/client": "^0.0.2",
+    "@getbizi/client": "workspace:*",
     "babel-preset-solid": "1.9.9",
     "commander": "^14.0.3",
     "picocolors": "^1.1.1",

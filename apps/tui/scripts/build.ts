@@ -16,19 +16,19 @@ const targetConfigs: TargetConfig[] = [
 		id: "darwin-arm64",
 		bunTarget: "bun-darwin-arm64",
 		openTuiCorePackage: "@opentui/core-darwin-arm64",
-		outputPath: "../../../packages/bizi-darwin-arm64/bin/bizi",
+		outputPath: "../packages/bizi-darwin-arm64/bin/bizi",
 	},
 	{
 		id: "darwin-x64",
 		bunTarget: "bun-darwin-x64",
 		openTuiCorePackage: "@opentui/core-darwin-x64",
-		outputPath: "../../../packages/bizi-darwin-x64/bin/bizi",
+		outputPath: "../packages/bizi-darwin-x64/bin/bizi",
 	},
 	{
 		id: "windows-x64",
 		bunTarget: "bun-windows-x64",
 		openTuiCorePackage: "@opentui/core-win32-x64",
-		outputPath: "../../../packages/bizi-win32-x64/bin/bizi.exe",
+		outputPath: "../packages/bizi-win32-x64/bin/bizi.exe",
 	},
 	{
 		id: "windows-arm64",
@@ -36,7 +36,7 @@ const targetConfigs: TargetConfig[] = [
 		// We compile an x64 binary so arm64 users can run it via Windows x64 emulation.
 		bunTarget: "bun-windows-x64",
 		openTuiCorePackage: "@opentui/core-win32-x64",
-		outputPath: "../../../packages/bizi-win32-arm64/bin/bizi.exe",
+		outputPath: "../packages/bizi-win32-arm64/bin/bizi.exe",
 	},
 ];
 

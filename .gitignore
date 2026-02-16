@@ -4,3 +4,5 @@ dist
 *.db
 packages/bizi-*/bin/*
 !packages/bizi-*/bin/.gitkeep
+
+.DS_Store

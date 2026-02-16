@@ -44,10 +44,10 @@ bun run compile:all
 Then verify binaries and launcher flow:
 
 ```bash
-ls -la ../../packages/bizi-darwin-arm64/bin
-ls -la ../../packages/bizi-darwin-x64/bin
-ls -la ../../packages/bizi-win32-x64/bin
-ls -la ../../packages/bizi-win32-arm64/bin
+ls -la ./packages/bizi-darwin-arm64/bin
+ls -la ./packages/bizi-darwin-x64/bin
+ls -la ./packages/bizi-win32-x64/bin
+ls -la ./packages/bizi-win32-arm64/bin
 node ./bin/bizi.js --help
 ```
 
