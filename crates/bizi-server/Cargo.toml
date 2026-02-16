@@ -1,10 +1,14 @@
 [package]
-name = "server"
+name = "bizi-server"
 version = "0.0.2"
 edition = "2024"
+description = "Task runner server for the bizi project"
+license = "MIT"
+repository = "https://github.com/ieedan/bizi"
+homepage = "https://getbizi.dev"
 
 [[bin]]
-name = "server"
+name = "bizi-server"
 path = "src/main.rs"
 
 [dependencies]

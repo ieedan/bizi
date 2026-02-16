@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Dispatch npm publish workflow
+      - name: Dispatch package publish workflow
         uses: actions/github-script@v7
         env:
           PATHS_RELEASED: ${{ needs.release-please.outputs.paths_released }}

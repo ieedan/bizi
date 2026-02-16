@@ -15,7 +15,7 @@
     }
   ],
   "packages": {
-    "services/server": {
+    "crates/bizi-server": {
       "release-type": "rust",
       "component": "server"
     },
