@@ -44,6 +44,9 @@ const appRoot = fileURLToPath(new URL("../", import.meta.url));
 const nodeModulesRoot = fileURLToPath(
 	new URL("../../../node_modules/", import.meta.url)
 );
+const localNodeModulesRoot = fileURLToPath(
+	new URL("../node_modules/", import.meta.url)
+);
 
 async function pathExists(path: string) {
 	try {
@@ -54,18 +57,38 @@ async function pathExists(path: string) {
 	}
 }
 
+async function findPackageJson(packagePath: string): Promise<string | null> {
+	// Try root node_modules first (for npm/yarn)
+	const rootPath = join(nodeModulesRoot, packagePath, "package.json");
+	if (await pathExists(rootPath)) {
+		return rootPath;
+	}
+
+	// Try local node_modules (for pnpm)
+	const localPath = join(localNodeModulesRoot, packagePath, "package.json");
+	if (await pathExists(localPath)) {
+		return localPath;
+	}
+
+	return null;
+}
+
 async function ensureOpenTuiCorePackage(packageName: string) {
 	const packageJsonPath = join(nodeModulesRoot, packageName, "package.json");
 	if (await pathExists(packageJsonPath)) {
 		return;
 	}
 
-	const corePackageJsonPath = join(
-		nodeModulesRoot,
-		"@opentui",
-		"core",
-		"package.json"
-	);
+	// Try to find @opentui/core package.json in multiple locations
+	const corePackageJsonPath = await findPackageJson("@opentui/core");
+	if (!corePackageJsonPath) {
+		throw new Error(
+			`Could not find @opentui/core package.json. Checked:\n` +
+				`  - ${join(nodeModulesRoot, "@opentui/core", "package.json")}\n` +
+				`  - ${join(localNodeModulesRoot, "@opentui/core", "package.json")}`
+		);
+	}
+
 	const corePackage = JSON.parse(
 		await readFile(corePackageJsonPath, "utf8")
 	) as {
