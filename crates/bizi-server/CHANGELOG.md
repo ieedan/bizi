@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.7](https://github.com/ieedan/bizi/compare/server-v0.2.6...server-v0.2.7) (2026-02-18)
+
+
+### Bug Fixes
+
+* **server:** Ensure windows processes are killed on cancel ([10c3883](https://github.com/ieedan/bizi/commit/10c3883c735ff279032a8f684ac3ecbd3b997975))
+* **server:** Ensure windows processes are killed on cancel ([bda7e46](https://github.com/ieedan/bizi/commit/bda7e464ed6684c0e8bf10e99010c3fca91d1fd3))
+* **server:** improve restart/cancellation handling ([a9d853e](https://github.com/ieedan/bizi/commit/a9d853e3e2be2588d4128278aacaf2e5b34d6ae7))
+* **server:** Windows fixes ([0b200ce](https://github.com/ieedan/bizi/commit/0b200ce48fec22857b6ae9fe7e1895ce571e951a))
+
 ## [0.2.6](https://github.com/ieedan/bizi/compare/server-v0.2.5...server-v0.2.6) (2026-02-16)
 
 
