@@ -181,13 +181,23 @@ PLIST_XML
     }
     WIN_EXE=$(to_win_path "$EXE_PATH")
     WIN_DATA=$(to_win_path "$DATA_DIR")
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "
-      \$action = New-ScheduledTaskAction -Execute '${WIN_EXE}' -Argument '--address 0.0.0.0 --port 7436' -WorkingDirectory '${WIN_DATA}'
-      \$trigger = New-ScheduledTaskTrigger -AtLogOn -User \$env:USERNAME
-      \$principal = New-ScheduledTaskPrincipal -UserId \$env:USERNAME -LogonType Interactive
-      Register-ScheduledTask -TaskName 'BiziServer' -Action \$action -Trigger \$trigger -Principal \$principal -Force
-    "
-    echo -e "${GREEN}Installed. Server will run at logon (port 7436).${NC}"
+    WIN_EXE_ESC=$(printf '%s' "$WIN_EXE" | sed "s/'/''/g")
+    WIN_DATA_ESC=$(printf '%s' "$WIN_DATA" | sed "s/'/''/g")
+    TASK_PS1="$(mktemp).ps1"
+    cat > "$TASK_PS1" <<EOF
+\$exePath = '${WIN_EXE_ESC}'
+\$workingDir = '${WIN_DATA_ESC}'
+\$actionArgs = "-NoProfile -WindowStyle Hidden -Command \`"Start-Process -FilePath '\$exePath' -ArgumentList '--address 0.0.0.0 --port 7436' -WorkingDirectory '\$workingDir' -WindowStyle Hidden\`""
+\$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$actionArgs
+\$trigger = New-ScheduledTaskTrigger -AtLogOn -User \$env:USERNAME
+\$principal = New-ScheduledTaskPrincipal -UserId \$env:USERNAME -LogonType Interactive
+Register-ScheduledTask -TaskName 'BiziServer' -Action \$action -Trigger \$trigger -Principal \$principal -Force | Out-Null
+Start-ScheduledTask -TaskName 'BiziServer' -ErrorAction SilentlyContinue
+EOF
+    WIN_TASK_PS1=$(to_win_path "$TASK_PS1")
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WIN_TASK_PS1"
+    rm -f "$TASK_PS1"
+    echo -e "${GREEN}Installed. Server is running and will start at logon (port 7436).${NC}"
     echo -e "  Binary: $BIN_DIR/bizi-server.exe"
     echo -e "  Data:   $DATA_DIR"
   fi

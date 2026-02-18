@@ -27,7 +27,7 @@ use tokio::{
 use utoipa::ToSchema;
 
 use crate::{
-    api::{AppState, error::ErrorResponse},
+    api::{AppState, RunningProcessEntry, error::ErrorResponse},
     config::{Config, Task},
     db::entities::{
         task_run::{self, TaskRunStatus},
@@ -1198,7 +1198,7 @@ async fn mark_task_run_running(state: &AppState, run_id: &str) -> Result<Option<
 
 async fn run_command(
     state: AppState,
-    running_processes: std::sync::Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    running_processes: std::sync::Arc<Mutex<HashMap<String, RunningProcessEntry>>>,
     run_id: String,
     cwd: &str,
     task_key: &str,
@@ -1251,11 +1251,18 @@ async fn run_command(
 
     match command_builder.spawn() {
         Ok(mut child) => {
+            let execution_id = nanoid!(10, &TASK_RUN_ID_ALPHABET);
             let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
             running_processes
                 .lock()
                 .await
-                .insert(run_id.clone(), cancel_tx);
+                .insert(
+                    run_id.clone(),
+                    RunningProcessEntry {
+                        execution_id: execution_id.clone(),
+                        cancel_tx,
+                    },
+                );
 
             let mut stream_tasks = Vec::new();
 
@@ -1293,10 +1300,19 @@ async fn run_command(
                     }
                     #[cfg(not(unix))]
                     {
-                        let _ = child.kill().await;
+                        if let Some(pid) = child.id() {
+                            let _ = terminate_process_tree(pid).await;
+                        } else {
+                            let _ = child.kill().await;
+                        }
                     }
                     let _ = child.wait().await;
-                    running_processes.lock().await.remove(&run_id);
+                    remove_running_process_if_match(
+                        running_processes.clone(),
+                        run_id.as_str(),
+                        execution_id.as_str(),
+                    )
+                    .await;
                     for stream_task in stream_tasks {
                         let _ = stream_task.await;
                     }
@@ -1304,7 +1320,12 @@ async fn run_command(
                 }
             };
 
-            running_processes.lock().await.remove(&run_id);
+            remove_running_process_if_match(
+                running_processes.clone(),
+                run_id.as_str(),
+                execution_id.as_str(),
+            )
+            .await;
 
             for stream_task in stream_tasks {
                 let _ = stream_task.await;
@@ -1318,6 +1339,47 @@ async fn run_command(
         }
         Err(_) => TaskRunStatus::Failed,
     }
+}
+
+async fn remove_running_process_if_match(
+    running_processes: std::sync::Arc<Mutex<HashMap<String, RunningProcessEntry>>>,
+    run_id: &str,
+    execution_id: &str,
+) {
+    let mut running = running_processes.lock().await;
+    if running
+        .get(run_id)
+        .is_some_and(|entry| entry.execution_id == execution_id)
+    {
+        running.remove(run_id);
+    }
+}
+
+#[cfg(target_os = "windows")]
+async fn terminate_process_tree(pid: u32) -> std::io::Result<()> {
+    let status = Command::new("taskkill")
+        .arg("/PID")
+        .arg(pid.to_string())
+        .arg("/T")
+        .arg("/F")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(format!(
+            "taskkill failed for pid {pid} with status {status}"
+        )))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+async fn terminate_process_tree(_pid: u32) -> std::io::Result<()> {
+    Ok(())
 }
 
 fn build_task_command_path() -> Option<std::ffi::OsString> {
@@ -1578,8 +1640,8 @@ async fn cancel_task_runs(state: &AppState, run_ids: &[String]) -> Result<(), Db
             continue;
         }
 
-        if let Some(cancel_tx) = state.running_processes.lock().await.remove(run_id) {
-            let _ = cancel_tx.send(());
+        if let Some(process_entry) = state.running_processes.lock().await.remove(run_id) {
+            let _ = process_entry.cancel_tx.send(());
         }
 
         append_task_log_line(
@@ -1734,7 +1796,7 @@ pub async fn cancel_all_running_processes(state: &AppState) {
         let mut running = state.running_processes.lock().await;
         running
             .drain()
-            .map(|(_, sender)| sender)
+            .map(|(_, process_entry)| process_entry.cancel_tx)
             .collect::<Vec<_>>()
     };
 

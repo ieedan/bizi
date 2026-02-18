@@ -30,8 +30,13 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub task_events: broadcast::Sender<tasks::TaskRunStatusChangedEvent>,
     pub task_log_events: broadcast::Sender<tasks::TaskRunLogLine>,
-    pub running_processes: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    pub running_processes: Arc<Mutex<HashMap<String, RunningProcessEntry>>>,
     pub run_include_tasks: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+}
+
+pub struct RunningProcessEntry {
+    pub execution_id: String,
+    pub cancel_tx: oneshot::Sender<()>,
 }
 
 pub fn create_app_state(db: DatabaseConnection) -> AppState {

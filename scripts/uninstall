@@ -31,11 +31,43 @@ if [ "$os" = "darwin" ]; then
 
 elif [ "$os" = "windows" ]; then
   DATA_DIR="${LOCALAPPDATA:-$USERPROFILE/AppData/Local}/bizi"
+  EXE_PATH="$DATA_DIR/bin/bizi-server.exe"
+
+  # Convert POSIX path to Windows path for PowerShell.
+  to_win_path() {
+    if command -v cygpath >/dev/null 2>&1; then
+      cygpath -w "$1"
+    else
+      local p="$1"
+      case "$p" in
+        /[a-zA-Z]/*) p="${p:1:1}:\\${p:3}";;
+      esac
+      echo "$p" | sed 's|/|\\|g'
+    fi
+  }
+
+  WIN_EXE=$(to_win_path "$EXE_PATH")
+  WIN_EXE_ESC=$(printf '%s' "$WIN_EXE" | sed "s/'/''/g")
 
   echo "Unregistering scheduled task..."
   powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
-    "Unregister-ScheduledTask -TaskName 'BiziServer' -Confirm:\$false -ErrorAction SilentlyContinue"
+    "\$taskName = 'BiziServer'; \
+     Stop-ScheduledTask -TaskName \$taskName -ErrorAction SilentlyContinue | Out-Null; \
+     Get-CimInstance Win32_Process | Where-Object { \$_.ExecutablePath -and (\$_.ExecutablePath -ieq '${WIN_EXE_ESC}') } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }; \
+     Unregister-ScheduledTask -TaskName \$taskName -Confirm:\$false -ErrorAction SilentlyContinue"
   echo "Removing install directory..."
-  rm -rf "$DATA_DIR"
+  removed=0
+  for _ in 1 2 3 4 5; do
+    rm -rf "$DATA_DIR" 2>/dev/null || true
+    if [ ! -e "$DATA_DIR" ]; then
+      removed=1
+      break
+    fi
+    sleep 1
+  done
+  if [ "$removed" -ne 1 ]; then
+    echo -e "${RED}Failed to remove install directory. A process may still be using files in: $DATA_DIR${NC}"
+    exit 1
+  fi
   echo -e "${GREEN}Uninstall complete.${NC}"
 fi
