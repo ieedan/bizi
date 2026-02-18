@@ -1,5 +1,5 @@
 {
-  "crates/bizi-server": "0.2.7",
+  "crates/bizi-server": "0.3.0",
   "packages/client-js": "0.3.0",
   "apps/tui": "0.2.6",
   "apps/tui/packages/bizi-darwin-arm64": "0.2.6",
