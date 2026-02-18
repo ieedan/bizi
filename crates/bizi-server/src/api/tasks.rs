@@ -1293,7 +1293,11 @@ async fn run_command(
                     }
                     #[cfg(not(unix))]
                     {
-                        let _ = child.kill().await;
+                        if let Some(pid) = child.id() {
+                            let _ = terminate_process_tree(pid).await;
+                        } else {
+                            let _ = child.kill().await;
+                        }
                     }
                     let _ = child.wait().await;
                     running_processes.lock().await.remove(&run_id);
@@ -1318,6 +1322,33 @@ async fn run_command(
         }
         Err(_) => TaskRunStatus::Failed,
     }
+}
+
+#[cfg(target_os = "windows")]
+async fn terminate_process_tree(pid: u32) -> std::io::Result<()> {
+    let status = Command::new("taskkill")
+        .arg("/PID")
+        .arg(pid.to_string())
+        .arg("/T")
+        .arg("/F")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(format!(
+            "taskkill failed for pid {pid} with status {status}"
+        )))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+async fn terminate_process_tree(_pid: u32) -> std::io::Result<()> {
+    Ok(())
 }
 
 fn build_task_command_path() -> Option<std::ffi::OsString> {
