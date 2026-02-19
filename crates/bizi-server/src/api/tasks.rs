@@ -1232,9 +1232,15 @@ async fn run_command(
             command_builder.env("HOME", home);
         }
     }
-    // Signal to shell and child processes that no interactive TTY is available.
-    command_builder.env("TERM", "dumb");
+    // Signal to shell and child processes that no interactive TTY is available,
+    // while still advertising color support for rich log output.
+    command_builder.env("TERM", "xterm-256color");
     command_builder.env("CI", "true");
+    if std::env::var_os("NO_COLOR").is_none() {
+        command_builder.env("FORCE_COLOR", "1");
+        command_builder.env("CLICOLOR", "1");
+        command_builder.env("CLICOLOR_FORCE", "1");
+    }
     #[cfg(windows)]
     command_builder.arg("/c").arg(command.as_str());
     #[cfg(not(windows))]
@@ -1830,7 +1836,7 @@ async fn stream_task_logs<R>(
                 }
 
                 let decoded = String::from_utf8_lossy(&bytes).into_owned();
-                let line = sanitize_terminal_log_line(&decoded);
+                let line = normalize_terminal_log_line(&decoded);
 
                 if line.is_empty() && !decoded.is_empty() {
                     continue;
@@ -1847,84 +1853,9 @@ async fn stream_task_logs<R>(
     }
 }
 
-fn sanitize_terminal_log_line(line: &str) -> String {
+fn normalize_terminal_log_line(line: &str) -> String {
     let most_recent_segment = line.rsplit('\r').next().unwrap_or(line);
-    strip_ansi_escape_sequences(most_recent_segment)
-}
-
-fn strip_ansi_escape_sequences(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut cleaned = Vec::with_capacity(bytes.len());
-    let mut index = 0usize;
-
-    while index < bytes.len() {
-        let byte = bytes[index];
-        if byte == 0x1b {
-            index += 1;
-            if index >= bytes.len() {
-                break;
-            }
-
-            let next = bytes[index];
-            match next {
-                b'[' => {
-                    index += 1;
-                    while index < bytes.len() {
-                        let b = bytes[index];
-                        index += 1;
-                        if (0x40..=0x7e).contains(&b) {
-                            break;
-                        }
-                    }
-                }
-                b']' => {
-                    index += 1;
-                    while index < bytes.len() {
-                        if bytes[index] == 0x07 {
-                            index += 1;
-                            break;
-                        }
-                        if bytes[index] == 0x1b
-                            && index + 1 < bytes.len()
-                            && bytes[index + 1] == b'\\'
-                        {
-                            index += 2;
-                            break;
-                        }
-                        index += 1;
-                    }
-                }
-                b'P' | b'X' | b'^' | b'_' => {
-                    index += 1;
-                    while index < bytes.len() {
-                        if bytes[index] == 0x1b
-                            && index + 1 < bytes.len()
-                            && bytes[index + 1] == b'\\'
-                        {
-                            index += 2;
-                            break;
-                        }
-                        index += 1;
-                    }
-                }
-                _ => {
-                    // Skip simple two-byte escape forms.
-                    index += 1;
-                }
-            }
-            continue;
-        }
-
-        if byte.is_ascii_control() && byte != b'\t' {
-            index += 1;
-            continue;
-        }
-
-        cleaned.push(byte);
-        index += 1;
-    }
-
-    String::from_utf8_lossy(&cleaned).into_owned()
+    most_recent_segment.to_string()
 }
 
 async fn append_task_log_line(
@@ -1986,6 +1917,23 @@ async fn update_task_run_status(
         status: updated.status,
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_terminal_log_line;
+
+    #[test]
+    fn normalize_terminal_log_line_keeps_ansi_sgr_sequences() {
+        let input = "\u{1b}[31merror\u{1b}[0m";
+        assert_eq!(normalize_terminal_log_line(input), input);
+    }
+
+    #[test]
+    fn normalize_terminal_log_line_uses_most_recent_carriage_segment() {
+        let input = "step 1\rstep 2\r\u{1b}[32mdone\u{1b}[0m";
+        assert_eq!(normalize_terminal_log_line(input), "\u{1b}[32mdone\u{1b}[0m");
+    }
 }
 
 async fn trigger_subtasks(
