@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/ieedan/bizi/compare/tui-v0.2.6...tui-v0.3.0) (2026-02-19)
+
+
+### Features
+
+* **tui:** render ANSI-styled task logs in run details ([f936d15](https://github.com/ieedan/bizi/commit/f936d1562a421979d286eadd4356e6931daf20e8))
+
 ## [0.2.6](https://github.com/ieedan/bizi/compare/tui-v0.2.5...tui-v0.2.6) (2026-02-16)
 
 

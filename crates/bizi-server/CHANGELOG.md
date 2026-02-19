@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ieedan/bizi/compare/server-v0.3.0...server-v0.4.0) (2026-02-19)
+
+
+### Features
+
+* **server:** preserve ANSI task logs and enable color output ([5bd1013](https://github.com/ieedan/bizi/commit/5bd1013a40a07275bf09815b7cf6a2cbb02538cc))
+
 ## [0.3.0](https://github.com/ieedan/bizi/compare/server-v0.2.7...server-v0.3.0) (2026-02-18)
 
 

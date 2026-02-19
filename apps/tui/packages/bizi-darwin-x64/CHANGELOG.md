@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/ieedan/bizi/compare/tui-darwin-x64-v0.2.6...tui-darwin-x64-v0.3.0) (2026-02-19)
+
+
+### Miscellaneous Chores
+
+* **tui-darwin-x64:** Synchronize tui versions
+
 ## [0.2.6](https://github.com/ieedan/bizi/compare/tui-darwin-x64-v0.2.5...tui-darwin-x64-v0.2.6) (2026-02-16)
 
 
