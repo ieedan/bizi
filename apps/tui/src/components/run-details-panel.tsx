@@ -12,7 +12,7 @@ import {
 	formatElapsedDuration,
 	formatLogTimestamp,
 	formatTaskTagForLog,
-	sanitizeLogForDisplay,
+	parseAnsiLogSegments,
 } from "../lib/logs";
 import { StatusIndicator } from "./status-indicator";
 
@@ -152,7 +152,19 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 								</box>
 								<box flexGrow={1}>
 									<text>
-										{sanitizeLogForDisplay(line.line)}
+										<For
+											each={parseAnsiLogSegments(
+												line.line
+											)}
+										>
+											{(segment) => (
+												<span
+													style={segment.style}
+												>
+													{segment.text}
+												</span>
+											)}
+										</For>
 									</text>
 								</box>
 							</box>
