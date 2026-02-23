@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/ieedan/bizi/compare/tui-v0.3.0...tui-v0.3.1) (2026-02-23)
+
+
+### Bug Fixes
+
+* **server:** Ensure commands can be found on macos installation ([b5dfceb](https://github.com/ieedan/bizi/commit/b5dfceb35208436f2ef65e2620ab497097abc432))
+
 ## [0.3.0](https://github.com/ieedan/bizi/compare/tui-v0.2.6...tui-v0.3.0) (2026-02-19)
 
 
