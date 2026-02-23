@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/ieedan/bizi/compare/tui-v0.3.1...tui-v0.3.2) (2026-02-23)
+
+
+### Bug Fixes
+
+* **tui:** show correct state in footer ([7374cb8](https://github.com/ieedan/bizi/commit/7374cb8827fb13c110906d73751a58be37732300))
+
 ## [0.3.1](https://github.com/ieedan/bizi/compare/tui-v0.3.0...tui-v0.3.1) (2026-02-23)
 
 
