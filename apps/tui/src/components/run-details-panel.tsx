@@ -18,7 +18,7 @@ import { StatusIndicator } from "./status-indicator";
 
 interface RunDetailsPanelProps {
 	selectedStatus: string | null;
-	selectedRunStatus:
+	selectedFooterStatus:
 		| "Queued"
 		| "Running"
 		| "Success"
@@ -57,7 +57,7 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 		() => firstLogTimestamp() ?? props.selectedRunUpdatedAt ?? nowMs()
 	);
 	const runEndTimestamp = createMemo(() => {
-		const status = props.selectedRunStatus;
+		const status = props.selectedFooterStatus;
 		if (status === "Running" || status === "Queued") {
 			return nowMs();
 		}
@@ -76,7 +76,7 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 			return `Waiting on ${waitingOnValue} for ${formatElapsedDuration(waitingDurationMs())}`;
 		}
 
-		const runStatus = props.selectedRunStatus;
+		const runStatus = props.selectedFooterStatus;
 		if (runStatus === "Running") {
 			return `Running for ${formatElapsedDuration(runDurationMs())}`;
 		}
@@ -197,7 +197,7 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 					<Show when={props.selectedStatus !== "Indeterminate"}>
 						<box flexDirection="row">
 							<StatusIndicator
-								status={props.selectedRunStatus ?? undefined}
+								status={props.selectedFooterStatus ?? undefined}
 							/>
 							<text> {footerStatusText()}</text>
 						</box>

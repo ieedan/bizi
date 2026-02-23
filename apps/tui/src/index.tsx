@@ -146,6 +146,18 @@ function App() {
 		return getDirectChildTaskKeys(tasks(), row.key).length > 0;
 	});
 	const selectedHasCommand = createMemo(() => selectedCommand() !== null);
+	const selectedFooterStatus = createMemo<
+		"Queued" | "Running" | "Success" | "Cancelled" | "Failed" | null
+	>(() => {
+		if (selectedHasChildren() && !selectedHasCommand()) {
+			const displayStatus = selectedDisplayStatus();
+			if (displayStatus === "Indeterminate" || !displayStatus) {
+				return null;
+			}
+			return displayStatus;
+		}
+		return selectedRun()?.status ?? null;
+	});
 	const canToggleLogMode = createMemo(
 		() => selectedHasChildren() && selectedHasCommand()
 	);
@@ -634,7 +646,7 @@ function App() {
 						logColorByTaskKey={logColorByTaskKey()}
 						logs={logs()}
 						logTaskTagWidth={logTaskTagWidth()}
-						selectedRunStatus={selectedRun()?.status ?? null}
+						selectedFooterStatus={selectedFooterStatus()}
 						selectedRunUpdatedAt={selectedRun()?.updatedAt ?? null}
 						selectedStatus={selectedDisplayStatus() ?? null}
 						waitingOn={selectedWaitingOn()}
