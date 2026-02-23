@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::OnceLock;
 
 use axum::{
     Json,
@@ -1259,16 +1260,13 @@ async fn run_command(
         Ok(mut child) => {
             let execution_id = nanoid!(10, &TASK_RUN_ID_ALPHABET);
             let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
-            running_processes
-                .lock()
-                .await
-                .insert(
-                    run_id.clone(),
-                    RunningProcessEntry {
-                        execution_id: execution_id.clone(),
-                        cancel_tx,
-                    },
-                );
+            running_processes.lock().await.insert(
+                run_id.clone(),
+                RunningProcessEntry {
+                    execution_id: execution_id.clone(),
+                    cancel_tx,
+                },
+            );
 
             let mut stream_tasks = Vec::new();
 
@@ -1388,9 +1386,53 @@ async fn terminate_process_tree(_pid: u32) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Spawns a login interactive shell once to capture the user's full PATH
+/// (including entries added by ~/.zshrc, nvm, volta, fnm, etc.) and caches
+/// the result for the lifetime of the process.
+#[cfg(unix)]
+fn resolve_user_shell_path() -> Option<std::ffi::OsString> {
+    static RESOLVED: OnceLock<Option<std::ffi::OsString>> = OnceLock::new();
+    RESOLVED
+        .get_or_init(|| {
+            let shell = resolve_command_shell();
+            let output = std::process::Command::new(&shell)
+                .arg("-lic")
+                .arg(r#"printf '%s' "$PATH""#)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .output()
+                .ok()?;
+
+            if !output.status.success() {
+                return None;
+            }
+
+            let path_str = String::from_utf8(output.stdout).ok()?;
+            if path_str.is_empty() {
+                return None;
+            }
+
+            Some(std::ffi::OsString::from(path_str))
+        })
+        .clone()
+}
+
 fn build_task_command_path() -> Option<std::ffi::OsString> {
     let mut seen = HashSet::new();
     let mut entries = Vec::new();
+
+    // On Unix, prefer the PATH resolved from a login interactive shell so we
+    // pick up entries from ~/.zshrc / ~/.bashrc (nvm, volta, fnm, pnpm, etc.)
+    // that a non-interactive login shell would miss.
+    #[cfg(unix)]
+    if let Some(shell_path) = resolve_user_shell_path() {
+        for path in std::env::split_paths(&shell_path) {
+            if seen.insert(path.clone()) {
+                entries.push(path);
+            }
+        }
+    }
 
     if let Some(existing_path) = std::env::var_os("PATH") {
         for path in std::env::split_paths(&existing_path) {
@@ -1932,7 +1974,10 @@ mod tests {
     #[test]
     fn normalize_terminal_log_line_uses_most_recent_carriage_segment() {
         let input = "step 1\rstep 2\r\u{1b}[32mdone\u{1b}[0m";
-        assert_eq!(normalize_terminal_log_line(input), "\u{1b}[32mdone\u{1b}[0m");
+        assert_eq!(
+            normalize_terminal_log_line(input),
+            "\u{1b}[32mdone\u{1b}[0m"
+        );
     }
 }
 

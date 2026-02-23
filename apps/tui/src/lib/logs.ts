@@ -205,7 +205,10 @@ function applySgrSequence(sequence: string, style: LogTextStyle): void {
 			const channel: "fg" | "bg" = code === 38 ? "fg" : "bg";
 			const mode = Number.parseInt(rawValues[index + 1] ?? "", 10);
 			if (mode === 5) {
-				const colorIndex = Number.parseInt(rawValues[index + 2] ?? "", 10);
+				const colorIndex = Number.parseInt(
+					rawValues[index + 2] ?? "",
+					10
+				);
 				const color = toAnsi256Color(colorIndex);
 				if (color) {
 					style[channel] = color;

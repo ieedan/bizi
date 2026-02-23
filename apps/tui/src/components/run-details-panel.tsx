@@ -158,9 +158,7 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 											)}
 										>
 											{(segment) => (
-												<span
-													style={segment.style}
-												>
+												<span style={segment.style}>
 													{segment.text}
 												</span>
 											)}

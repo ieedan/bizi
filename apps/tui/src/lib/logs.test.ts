@@ -28,6 +28,8 @@ describe("parseAnsiLogSegments", () => {
 
 describe("sanitizeLogForDisplay", () => {
 	it("returns plain text view for ansi-colored lines", () => {
-		expect(sanitizeLogForDisplay("a \u001b[32mok\u001b[0m b")).toBe("a ok b");
+		expect(sanitizeLogForDisplay("a \u001b[32mok\u001b[0m b")).toBe(
+			"a ok b"
+		);
 	});
 });
