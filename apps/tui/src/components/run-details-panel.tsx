@@ -63,7 +63,10 @@ function LogLine(props: {
 			</box>
 			<box flexShrink={0} width={props.logTaskTagWidth}>
 				<text fg={props.logColorByTaskKey[props.line.task]}>
-					{formatTaskTagForLog(props.line.task, props.logTaskTagWidth)}
+					{formatTaskTagForLog(
+						props.line.task,
+						props.logTaskTagWidth
+					)}
 				</text>
 			</box>
 			<box flexGrow={1}>
@@ -234,10 +237,11 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 					}}
 					stickyScroll
 					stickyStart="bottom"
-					viewportCulling={props.logs.length > VIRTUALIZATION_THRESHOLD}
+					viewportCulling={
+						props.logs.length > VIRTUALIZATION_THRESHOLD
+					}
 				>
 					<Show
-						when={visibleRange().virtualized}
 						fallback={
 							<For each={props.logs}>
 								{(line) => (
@@ -246,28 +250,27 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 										logColorByTaskKey={
 											props.logColorByTaskKey
 										}
-										logTaskTagWidth={
-											props.logTaskTagWidth
-										}
-										logTimestampWidth={
-											LOG_TIMESTAMP_WIDTH
-										}
+										logTaskTagWidth={props.logTaskTagWidth}
+										logTimestampWidth={LOG_TIMESTAMP_WIDTH}
 									/>
 								)}
 							</For>
 						}
+						when={visibleRange().virtualized}
 					>
 						{(() => {
 							const range = visibleRange();
 							const logs = props.logs;
 							const topSpacerHeight = range.start;
-							const bottomSpacerHeight =
-								logs.length - range.end;
+							const bottomSpacerHeight = logs.length - range.end;
 							return (
 								<>
 									<Show when={topSpacerHeight > 0}>
 										<box
-											height={topSpacerHeight * LOG_LINE_HEIGHT}
+											height={
+												topSpacerHeight *
+												LOG_LINE_HEIGHT
+											}
 										/>
 									</Show>
 									<For
