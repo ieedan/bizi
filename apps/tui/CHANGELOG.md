@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ieedan/bizi/compare/tui-v0.3.2...tui-v0.4.0) (2026-02-26)
+
+
+### Features
+
+* **tui:** Virtualize logs in run details panel ([#37](https://github.com/ieedan/bizi/issues/37)) ([aea8cbe](https://github.com/ieedan/bizi/commit/aea8cbe2df77654fbd0215e87349d48bc70cdb64))
+
 ## [0.3.2](https://github.com/ieedan/bizi/compare/tui-v0.3.1...tui-v0.3.2) (2026-02-23)
 
 
