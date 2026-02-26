@@ -24,9 +24,12 @@ const OVERSCAN_ROWS = 10;
 interface ScrollboxRef {
 	scrollTop: number;
 	viewport: { height: number };
+	scrollTo?: (position: number) => void;
+	scrollToBottom?: () => void;
 }
 
 interface RunDetailsPanelProps {
+	selectedTaskKey: string | null;
 	selectedStatus: string | null;
 	selectedFooterStatus:
 		| "Queued"
@@ -82,6 +85,26 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 	let scrollboxRef: ScrollboxRef | undefined;
 	const [scrollTop, setScrollTop] = createSignal(0);
 	const [viewportHeight, setViewportHeight] = createSignal(20);
+
+	createEffect(() => {
+		props.selectedTaskKey;
+
+		// Force virtualized view to bottom immediately
+		setScrollTop(Number.MAX_SAFE_INTEGER);
+
+		const scrollToBottom = () => {
+			const el = scrollboxRef;
+			if (!el) {
+				return;
+			}
+			el.scrollToBottom?.() ?? el.scrollTo?.(Number.MAX_SAFE_INTEGER);
+		};
+
+		const t1 = setTimeout(scrollToBottom, 0);
+		return () => {
+			clearTimeout(t1);
+		};
+	});
 
 	createEffect(() => {
 		const logs = props.logs;
