@@ -649,6 +649,7 @@ function App() {
 						selectedFooterStatus={selectedFooterStatus()}
 						selectedRunUpdatedAt={selectedRun()?.updatedAt ?? null}
 						selectedStatus={selectedDisplayStatus() ?? null}
+						selectedTaskKey={selectedRow()?.key ?? null}
 						waitingOn={selectedWaitingOn()}
 					/>
 				</box>
