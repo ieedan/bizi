@@ -2,10 +2,11 @@ import { createBiziApi } from "@getbizi/client";
 import { Command } from "commander";
 import { type CliOptions, parseCliOptions } from "../lib/args";
 import { cancelCommand } from "./cancel";
+import { initCommand } from "./init";
 import { runCommand } from "./run";
 import { statCommand } from "./stat";
 
-const reservedSubcommands = new Set(["run", "cancel", "stat"]);
+const reservedSubcommands = new Set(["run", "cancel", "stat", "init"]);
 
 type ResolveCliModeResult =
 	| { mode: "tui"; cliOptions: CliOptions }
@@ -92,6 +93,13 @@ export async function resolveCliMode(
 				api
 			);
 		});
+
+	program.command("init").action(async () => {
+		handledCommand = true;
+		commandExitCode = await initCommand({
+			cwd: resolvedCliOptions.cwd,
+		});
+	});
 
 	program.exitOverride();
 
