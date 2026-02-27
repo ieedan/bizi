@@ -4,6 +4,7 @@
 	// biome-ignore lint/performance/noNamespaceImport: <explanation>
 	import * as Code from "$lib/components/ui/code";
 	import { PMCommand } from "$lib/components/ui/pm-command";
+	import { Separator } from "$lib/components/ui/separator";
 	import { Snippet } from "$lib/components/ui/snippet";
 </script>
 
@@ -15,7 +16,7 @@
 	>
 </svelte:head>
 
-<main class="min-h-dvh flex items-center justify-center pt-[25svh] pb-6 font-mono">
+<main class="min-h-dvh flex items-center justify-center py-6 font-mono">
 	<div class="max-w-xl w-full">
 		<div class="mb-8 gap-2 flex flex-col items-center">
 			<h1 class="text-6xl text-center">bizi</h1>
@@ -27,6 +28,18 @@
 			</Button>
 		</div>
 
+		<h2 class="text-xl mb-2">Tell your agent to set it up for you</h2>
+		<Snippet
+			class="mb-6"
+			text="Setup bizi for me https://getbizi.dev/setup.md"
+		/>
+
+		<div class="flex items-center gap-2 mb-6 w-full relative">
+			<Separator class="flex-1"/>
+			<span class="text-sm text-muted-foreground">OR</span>
+			<Separator class="flex-1"/>
+		</div>
+		
 		<h2 class="text-xl mb-2">1. Install the server</h2>
 		<Snippet
 			class="mb-6"

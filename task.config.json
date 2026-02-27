@@ -3,16 +3,15 @@
   "tasks": {
     "dev": {
       "tasks": {
-        "server": {
-          "cwd": "./crates/bizi-server",
-          "command": "cargo run -- --port 3000"
-        },
         "generate": {
           "command": "pnpm tsx scripts/generate.ts"
         },
         "packages": {
           "command": "pnpm --filter './packages/*' dev",
           "dependsOn": ["dev:generate"]
+        },
+        "docs": {
+          "command": "pnpm --filter www dev"
         }
       }
     },
