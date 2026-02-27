@@ -1,5 +1,5 @@
-import { createBiziApi } from "@getbizi/client";
 import { Command } from "commander";
+import { api } from "../lib/bizi-api";
 import { type CliOptions, parseCliOptions } from "../lib/args";
 import { cancelCommand } from "./cancel";
 import { initCommand } from "./init";
@@ -25,7 +25,6 @@ export async function resolveCliMode(
 	let handledCommand = false;
 	let commandExitCode = 0;
 	let resolvedCliOptions = defaultCliOptions;
-	const api = createBiziApi({ port: 7436 });
 
 	const program = new Command()
 		.name("bizi")

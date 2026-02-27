@@ -17,6 +17,14 @@ The benefits go beyond just that though... Have you ever had that problem workin
 
 ## Getting Started
 
+### Tell your agent to set it up for you
+
+```md
+Setup bizi for me https://getbizi.dev/setup.md
+```
+
+OR
+
 ### Install the server
 
 This will install the server and start it as a background service.

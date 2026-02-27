@@ -1,11 +1,11 @@
-import {
-	createBiziApi,
-	type Task,
-	type TaskRunLogLine,
-	type TaskRunLogsStreamMessage,
-	type TaskRunTreeNode,
+import type {
+	Task,
+	TaskRunLogLine,
+	TaskRunLogsStreamMessage,
+	TaskRunTreeNode,
 } from "@getbizi/client";
 import { render, useKeyboard, useRenderer } from "@opentui/solid";
+import { api } from "./lib/bizi-api";
 import {
 	createEffect,
 	createMemo,
@@ -44,7 +44,6 @@ import {
 } from "./lib/task-structure";
 import type { LogMode } from "./types";
 
-const api = createBiziApi({ port: 7436 });
 const argv = process.argv.slice(2);
 let cliOptions: CliOptions = { cwd: process.cwd() };
 let cwd = cliOptions.cwd;

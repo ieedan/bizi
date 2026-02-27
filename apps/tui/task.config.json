@@ -8,9 +8,7 @@
         },
         "world": {
           "command": "echo World!",
-          "dependsOn": [
-            "hello-world:hello"
-          ]
+          "dependsOn": ["hello-world:hello"]
         }
       }
     }
