@@ -4,9 +4,6 @@ https://github.com/user-attachments/assets/5478763d-57c5-4201-8ee7-a4e6239a8bcf
 
 bizi is a better way to manage dependent concurrent tasks.
 
-> [!WARNING]
-> This is still in early development breaking changes are likely. 
-
 ## Why?
 
 If you have ever worked in a monorepo with multiple different tasks that depend on each other (for instance running your API in dev and running your web app in dev). Initially you might reach for something like concurrently to run this tasks in parallel. This works great until the moment where you need to restart one of the tasks, at which point you have no choice but to restart both tasks.
