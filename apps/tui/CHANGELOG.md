@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/ieedan/bizi/compare/tui-v0.5.0...tui-v0.5.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* **tui:** Ensure to exit process when quitting the tui ([c32c239](https://github.com/ieedan/bizi/commit/c32c239901c0516e1c1013efd3a76a701d534e6a))
+
 ## [0.5.0](https://github.com/ieedan/bizi/compare/tui-v0.4.0...tui-v0.5.0) (2026-02-27)
 
 
