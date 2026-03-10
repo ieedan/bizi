@@ -294,7 +294,12 @@ function App() {
 				return api.cancelTask(run.id);
 			})
 		);
+		quit();
+	}
+
+	function quit() {
 		renderer.destroy();
+		process.exit(0);
 	}
 
 	function requestQuit() {
@@ -302,7 +307,7 @@ function App() {
 			setShowQuitConfirmation(true);
 			return;
 		}
-		renderer.destroy();
+		quit();
 	}
 
 	function handleQuitConfirmationKeys() {
@@ -667,11 +672,9 @@ function App() {
 						isCancelling={isCancellingBeforeExit()}
 						onConfirm={(action) => {
 							if (action === "cancelAll") {
-								cancelRunningTasksBeforeExit().catch(() =>
-									renderer.destroy()
-								);
+								cancelRunningTasksBeforeExit().catch(() => quit());
 							} else {
-								renderer.destroy();
+								quit();
 							}
 						}}
 						runningTasks={runningTaskRows()}
