@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+
+use indexmap::IndexMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::OnceLock;
@@ -60,7 +62,7 @@ pub struct ListTaskRunsRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ListTasksResponseBody {
     /// The list of tasks that are defined in the task.config.json file
-    pub tasks: HashMap<String, Task>,
+    pub tasks: IndexMap<String, Task>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
