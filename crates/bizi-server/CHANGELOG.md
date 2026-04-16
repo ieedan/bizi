@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/ieedan/bizi/compare/server-v0.4.1...server-v0.5.0) (2026-04-16)
+
+
+### Features
+
+* **server:** preserve task.config.json order in task maps ([f223cd4](https://github.com/ieedan/bizi/commit/f223cd4e03e3e0827128e8d9b19b6e00ce8338bd))
+
 ## [0.4.1](https://github.com/ieedan/bizi/compare/server-v0.4.0...server-v0.4.1) (2026-02-23)
 
 
