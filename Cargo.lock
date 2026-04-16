@@ -236,6 +236,7 @@ dependencies = [
  "chrono",
  "clap",
  "futures-util",
+ "indexmap",
  "libc",
  "nanoid",
  "sea-orm",

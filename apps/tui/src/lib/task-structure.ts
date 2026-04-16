@@ -20,9 +20,7 @@ export function flattenTaskRows(taskTree: TaskTreeNode[]): TaskRow[] {
 
 export function buildTaskTree(tasks: Record<string, Task>): TaskTreeNode[] {
 	const buildNode = (taskKey: string): TaskTreeNode => {
-		const childKeys = getDirectChildTaskKeys(tasks, taskKey).sort((a, b) =>
-			a.localeCompare(b)
-		);
+		const childKeys = getDirectChildTaskKeys(tasks, taskKey);
 		return {
 			row: createTaskRow(taskKey),
 			children: childKeys.map((childKey) => buildNode(childKey)),
@@ -31,7 +29,6 @@ export function buildTaskTree(tasks: Record<string, Task>): TaskTreeNode[] {
 
 	return Object.keys(tasks)
 		.filter((taskKey) => !taskKey.includes(":"))
-		.sort((a, b) => a.localeCompare(b))
 		.map((taskKey) => buildNode(taskKey));
 }
 

@@ -1,5 +1,6 @@
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io::ErrorKind, path::Path};
+use std::{io::ErrorKind, path::Path};
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -16,13 +17,13 @@ pub struct Task {
     /// Whether the task is optional. If true, the task will only run if started manually.
     pub optional: Option<bool>,
     /// Subtasks of this task. Keys must be unique task names.
-    pub tasks: Option<HashMap<String, Task>>,
-    pub depends_on_tasks: Option<HashMap<String, Task>>,
+    pub tasks: Option<IndexMap<String, Task>>,
+    pub depends_on_tasks: Option<IndexMap<String, Task>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub tasks: HashMap<String, Task>,
+    pub tasks: IndexMap<String, Task>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -56,7 +57,7 @@ impl Config {
         };
 
         if let Some(depends_on) = &task.depends_on {
-            let mut depends_on_tasks = HashMap::new();
+            let mut depends_on_tasks = IndexMap::new();
             for key in depends_on.iter() {
                 let depends_on_task = get_task(&self.tasks, key.clone());
                 if let Some(depends_on_task) = depends_on_task {
@@ -69,13 +70,13 @@ impl Config {
         Some(task)
     }
 
-    pub fn get_all_tasks(&self) -> HashMap<String, Task> {
+    pub fn get_all_tasks(&self) -> IndexMap<String, Task> {
         get_all_tasks(&self.tasks, None)
     }
 }
 
 /// Handles getting nested tasks like `dev:packages` or `dev:server`.
-fn get_task(tasks: &HashMap<String, Task>, task_key: String) -> Option<&Task> {
+fn get_task(tasks: &IndexMap<String, Task>, task_key: String) -> Option<&Task> {
     let task_key_segments = task_key.split(":").collect::<Vec<&str>>();
     if task_key_segments.len() == 0 {
         return None;
@@ -93,9 +94,12 @@ fn get_task(tasks: &HashMap<String, Task>, task_key: String) -> Option<&Task> {
     Some(task)
 }
 
-fn get_all_tasks(tasks: &HashMap<String, Task>, base_key: Option<String>) -> HashMap<String, Task> {
+fn get_all_tasks(
+    tasks: &IndexMap<String, Task>,
+    base_key: Option<String>,
+) -> IndexMap<String, Task> {
     let base = base_key.map(|k| k + ":").unwrap_or("".to_string());
-    let mut task_keys: HashMap<String, Task> = HashMap::new();
+    let mut task_keys: IndexMap<String, Task> = IndexMap::new();
     for (key, task) in tasks.iter() {
         task_keys.insert(format!("{}{}", &base, key), task.clone());
         if let Some(tasks) = &task.tasks {
