@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/ieedan/bizi/compare/tui-v0.5.1...tui-v0.6.0) (2026-04-16)
+
+
+### Features
+
+* **tui:** display tasks in task.config.json order ([4b806c8](https://github.com/ieedan/bizi/commit/4b806c81e84b870fc901db92a6b7f9df6521f5df))
+
 ## [0.5.1](https://github.com/ieedan/bizi/compare/tui-v0.5.0...tui-v0.5.1) (2026-03-10)
 
 
