@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/ieedan/bizi/compare/tui-win32-arm64-v0.6.0...tui-win32-arm64-v0.7.0) (2026-04-30)
+
+
+### Miscellaneous Chores
+
+* **tui-win32-arm64:** Synchronize tui versions
+
 ## [0.6.0](https://github.com/ieedan/bizi/compare/tui-win32-arm64-v0.5.1...tui-win32-arm64-v0.6.0) (2026-04-16)
 
 

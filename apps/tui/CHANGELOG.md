@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/ieedan/bizi/compare/tui-v0.6.0...tui-v0.7.0) (2026-04-30)
+
+
+### Features
+
+* **tui:** copy log selection to clipboard with Ctrl+C ([#43](https://github.com/ieedan/bizi/issues/43)) ([634b934](https://github.com/ieedan/bizi/commit/634b9342928b0e5151cfb05ad5984e9e97b01d1d))
+
 ## [0.6.0](https://github.com/ieedan/bizi/compare/tui-v0.5.1...tui-v0.6.0) (2026-04-16)
 
 
