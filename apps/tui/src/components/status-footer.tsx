@@ -2,6 +2,7 @@ import { For } from "solid-js";
 
 interface StatusFooterProps {
 	errorMessage: string | null;
+	copyToastMessage: string | null;
 	canNavigateTasks: boolean;
 	canJumpParentTasks: boolean;
 	canRunOrRestart: boolean;
@@ -24,6 +25,7 @@ export function StatusFooter(props: StatusFooterProps) {
 		if (props.canToggleLogMode) {
 			parts.push({ key: "m", label: `logs: ${props.logMode}` });
 		}
+		parts.push({ key: "ctrl+c", label: "copy" });
 		parts.push({ key: "q", label: "quit" });
 		return parts;
 	}
@@ -50,6 +52,16 @@ export function StatusFooter(props: StatusFooterProps) {
 						</>
 					)}
 				</For>
+				{props.copyToastMessage ? (
+					<>
+						<span style={{ fg: "#666666" }}> | </span>
+						<span style={{ fg: "#7ddc8e" }}>
+							{props.copyToastMessage}
+						</span>
+					</>
+				) : (
+					""
+				)}
 				{props.errorMessage ? ` | error: ${props.errorMessage}` : ""}
 			</text>
 		</box>

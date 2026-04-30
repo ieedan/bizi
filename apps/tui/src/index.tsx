@@ -29,6 +29,7 @@ import {
 	isJumpParentsForwardShortcut,
 } from "./lib/keyboard-shortcuts";
 import { resolveTaskLogColor } from "./lib/logs";
+import { getSelectedTextByRow } from "./lib/selection-copy";
 import {
 	buildDisplayStatusByTaskKey,
 	canCancelRun,
@@ -69,6 +70,26 @@ function App() {
 	const [isCancellingBeforeExit, setIsCancellingBeforeExit] =
 		createSignal(false);
 	const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
+	const [copyToastMessage, setCopyToastMessage] = createSignal<string | null>(
+		null
+	);
+	let copyToastTimeoutId: ReturnType<typeof setTimeout> | null = null;
+	const showCopyToast = (message: string) => {
+		setCopyToastMessage(message);
+		if (copyToastTimeoutId !== null) {
+			clearTimeout(copyToastTimeoutId);
+		}
+		copyToastTimeoutId = setTimeout(() => {
+			setCopyToastMessage(null);
+			copyToastTimeoutId = null;
+		}, 2000);
+	};
+	onCleanup(() => {
+		if (copyToastTimeoutId !== null) {
+			clearTimeout(copyToastTimeoutId);
+			copyToastTimeoutId = null;
+		}
+	});
 
 	const taskTree = createMemo(() => buildTaskTree(tasks()));
 	const taskRows = createMemo(() => flattenTaskRows(taskTree()));
@@ -277,6 +298,46 @@ function App() {
 
 	function handleQuitKey(key: { name: string; ctrl?: boolean }) {
 		return key.name === "q" || (key.ctrl && key.name === "c");
+	}
+
+	function copySelectionToClipboard(): boolean {
+		const selection = renderer.getSelection();
+		if (!selection?.isActive) {
+			return false;
+		}
+		const text = getSelectedTextByRow(selection);
+		if (text.length === 0) {
+			return false;
+		}
+		const copied = renderer.copyToClipboardOSC52(text);
+		const lineCount = text.split("\n").length;
+		const linesLabel = lineCount === 1 ? "1 line" : `${lineCount} lines`;
+		showCopyToast(
+			copied
+				? `Copied ${linesLabel} to clipboard`
+				: "Copy failed (terminal does not support OSC52)"
+		);
+		renderer.clearSelection();
+		return true;
+	}
+
+	function handleCopySelectionKey(key: {
+		name: string;
+		ctrl?: boolean;
+		meta?: boolean;
+		super?: boolean;
+	}) {
+		if (key.name !== "c") {
+			return false;
+		}
+		// `ctrl` covers Ctrl+C on every platform.
+		// `super`/`meta` covers Cmd+C in terminals that forward it (Kitty,
+		// Ghostty, WezTerm with kitty keyboard protocol). Apple Terminal and
+		// default iTerm2 swallow Cmd+C themselves before it ever reaches us.
+		if (!(key.ctrl || key.meta || key.super)) {
+			return false;
+		}
+		return copySelectionToClipboard();
 	}
 
 	async function cancelRunningTasksBeforeExit() {
@@ -502,6 +563,9 @@ function App() {
 		if (handleQuitConfirmationKeys()) {
 			return;
 		}
+		if (handleCopySelectionKey(key)) {
+			return;
+		}
 		if (handleQuitKey(key)) {
 			requestQuit();
 			return;
@@ -663,6 +727,7 @@ function App() {
 					canNavigateTasks={canNavigateTasks()}
 					canRunOrRestart={hasTaskSelection()}
 					canToggleLogMode={canToggleLogMode()}
+					copyToastMessage={copyToastMessage()}
 					errorMessage={errorMessage()}
 					logMode={logMode()}
 					runAction={selectedRunAction()}
@@ -672,7 +737,9 @@ function App() {
 						isCancelling={isCancellingBeforeExit()}
 						onConfirm={(action) => {
 							if (action === "cancelAll") {
-								cancelRunningTasksBeforeExit().catch(() => quit());
+								cancelRunningTasksBeforeExit().catch(() =>
+									quit()
+								);
 							} else {
 								quit();
 							}
@@ -693,7 +760,10 @@ async function main() {
 
 	cliOptions = mode.cliOptions;
 	cwd = cliOptions.cwd;
-	render(() => <App />);
+	// We handle Ctrl+C ourselves so it can copy a selection instead of always
+	// exiting. Without this the renderer would call destroy() on Ctrl+C even
+	// when our useKeyboard handler returns early.
+	render(() => <App />, { exitOnCtrlC: false });
 }
 
 main().catch((error: unknown) => {
