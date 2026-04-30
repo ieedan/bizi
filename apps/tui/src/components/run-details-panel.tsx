@@ -20,6 +20,8 @@ import { StatusIndicator } from "./status-indicator";
 const LOG_LINE_HEIGHT = 1;
 const VIRTUALIZATION_THRESHOLD = 300;
 const OVERSCAN_ROWS = 10;
+const LOG_SELECTION_BG = "#3a4a78";
+const LOG_SELECTION_FG = "#ffffff";
 
 interface ScrollboxRef {
 	scrollTop: number;
@@ -57,12 +59,20 @@ function LogLine(props: {
 	return (
 		<box flexDirection="row">
 			<box flexShrink={0} width={props.logTimestampWidth + 1}>
-				<text fg="#666666">
+				<text
+					fg="#666666"
+					selectionBg={LOG_SELECTION_BG}
+					selectionFg={LOG_SELECTION_FG}
+				>
 					{formatLogTimestamp(props.line.timestamp)}{" "}
 				</text>
 			</box>
 			<box flexShrink={0} width={props.logTaskTagWidth}>
-				<text fg={props.logColorByTaskKey[props.line.task]}>
+				<text
+					fg={props.logColorByTaskKey[props.line.task]}
+					selectionBg={LOG_SELECTION_BG}
+					selectionFg={LOG_SELECTION_FG}
+				>
 					{formatTaskTagForLog(
 						props.line.task,
 						props.logTaskTagWidth
@@ -70,7 +80,10 @@ function LogLine(props: {
 				</text>
 			</box>
 			<box flexGrow={1}>
-				<text>
+				<text
+					selectionBg={LOG_SELECTION_BG}
+					selectionFg={LOG_SELECTION_FG}
+				>
 					<For each={parseAnsiLogSegments(props.line.line)}>
 						{(segment) => (
 							<span style={segment.style}>{segment.text}</span>
