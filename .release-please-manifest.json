@@ -6,10 +6,10 @@
   "apps/tui/packages/bizi-darwin-x64": "0.7.0",
   "apps/tui/packages/bizi-win32-x64": "0.7.0",
   "apps/tui/packages/bizi-win32-arm64": "0.7.0",
-  "crates/bizi-tui": "0.1.0",
-  "apps/tui-rs": "0.1.0",
-  "apps/tui-rs/packages/bizi-rs-darwin-arm64": "0.1.0",
-  "apps/tui-rs/packages/bizi-rs-darwin-x64": "0.1.0",
-  "apps/tui-rs/packages/bizi-rs-win32-x64": "0.1.0",
-  "apps/tui-rs/packages/bizi-rs-win32-arm64": "0.1.0"
+  "crates/bizi-tui": "0.1.1",
+  "apps/tui-rs": "0.1.1",
+  "apps/tui-rs/packages/bizi-rs-darwin-arm64": "0.1.1",
+  "apps/tui-rs/packages/bizi-rs-darwin-x64": "0.1.1",
+  "apps/tui-rs/packages/bizi-rs-win32-x64": "0.1.1",
+  "apps/tui-rs/packages/bizi-rs-win32-arm64": "0.1.1"
 }

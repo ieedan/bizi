@@ -355,10 +355,27 @@ jobs:
 
       - name: Publish TUI platform packages first
         run: |
-          pnpm publish ./apps/tui-rs/packages/bizi-rs-darwin-arm64 --access public --provenance --no-git-checks
-          pnpm publish ./apps/tui-rs/packages/bizi-rs-darwin-x64 --access public --provenance --no-git-checks
-          pnpm publish ./apps/tui-rs/packages/bizi-rs-win32-x64 --access public --provenance --no-git-checks
-          pnpm publish ./apps/tui-rs/packages/bizi-rs-win32-arm64 --access public --provenance --no-git-checks
+          set -euo pipefail
+          # A version that is already on the registry is treated as done rather
+          # than fatal, so a re-dispatch after a partial failure can finish the
+          # remaining packages instead of aborting on the first one.
+          publish() {
+            local out
+            if out=$(pnpm publish "$1" --access public --provenance --no-git-checks 2>&1); then
+              echo "$out"
+              return 0
+            fi
+            echo "$out"
+            if echo "$out" | grep -q "cannot publish over the previously published versions"; then
+              echo "::notice::$1 is already published at this version, skipping"
+              return 0
+            fi
+            return 1
+          }
+          publish ./apps/tui-rs/packages/bizi-rs-darwin-arm64
+          publish ./apps/tui-rs/packages/bizi-rs-darwin-x64
+          publish ./apps/tui-rs/packages/bizi-rs-win32-x64
+          publish ./apps/tui-rs/packages/bizi-rs-win32-arm64
 
       - name: Publish main TUI package
         run: pnpm publish ./apps/tui-rs --access public --provenance --no-git-checks
