@@ -53,7 +53,10 @@ struct StartTaskBody {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum TaskRunLogsStreamMessage {
     Snapshot {
-        #[serde(rename = "runId")]
+        // Servers before the camelCase fix send `run_id`. Accept both spellings
+        // so an older server still delivers snapshots instead of having them
+        // silently dropped by `stream_json`.
+        #[serde(rename = "runId", alias = "run_id", default)]
         run_id: String,
         logs: Vec<TaskRunLogLine>,
     },
@@ -328,6 +331,18 @@ mod tests {
             snapshot,
             TaskRunLogsStreamMessage::Snapshot { .. }
         ));
+
+        // Servers older than the camelCase fix send `run_id`; dropping those
+        // snapshots left the log pane stuck on the previously selected task.
+        let legacy_snapshot: TaskRunLogsStreamMessage =
+            serde_json::from_str(r#"{"type":"snapshot","run_id":"r1","logs":[]}"#).unwrap();
+        match legacy_snapshot {
+            TaskRunLogsStreamMessage::Snapshot { run_id, logs } => {
+                assert_eq!(run_id, "r1");
+                assert!(logs.is_empty());
+            }
+            _ => panic!("expected a snapshot"),
+        }
 
         let error: TaskRunLogsStreamMessage =
             serde_json::from_str(r#"{"type":"error","message":"nope"}"#).unwrap();

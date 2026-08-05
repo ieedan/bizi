@@ -9,7 +9,7 @@ use ratatui::style::{Color, Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::logs::{
-    format_elapsed_duration, format_log_timestamp, format_task_tag_for_log, parse_ansi_log_segments,
+    format_elapsed_duration, format_log_timestamp, format_task_tag_for_log, wrap_log_line,
 };
 use crate::model::{DisplayTaskStatus, TaskRunStatus, TaskTreeNode};
 use crate::status::{parse_color, task_status_display};
@@ -24,7 +24,7 @@ const SELECTION_BG: Color = Color::Rgb(0x3a, 0x4a, 0x78);
 const SELECTION_FG: Color = Color::Rgb(0xff, 0xff, 0xff);
 const DIALOG_WIDTH: u16 = 84;
 const TASK_PANEL_WIDTH: u16 = 42;
-const LOG_TIMESTAMP_WIDTH: usize = 14;
+pub const LOG_TIMESTAMP_WIDTH: usize = 14;
 /// Row of the search box's bottom border. Rows 1..=3 hold the box itself.
 const SEARCH_BOX_BOTTOM_Y: u16 = 3;
 
@@ -414,7 +414,11 @@ fn draw_logs(buffer: &mut Buffer, layout: &FrameLayout, app: &mut App) {
     }
 
     let viewport = area.height as usize;
-    let max_scroll = app.logs.len().saturating_sub(viewport);
+    let tag_width = app.log_task_tag_width();
+    let content_width = app.log_content_width(area.width, tag_width);
+    app.sync_log_layout(content_width, tag_width);
+
+    let max_scroll = app.log_layout.total_rows().saturating_sub(viewport);
     let scroll = if app.log_follow {
         max_scroll
     } else {
@@ -422,13 +426,24 @@ fn draw_logs(buffer: &mut Buffer, layout: &FrameLayout, app: &mut App) {
     };
     app.log_scroll = scroll;
 
-    let tag_width = app.log_task_tag_width();
-
+    // Lay out only the lines that intersect the viewport. `locate` jumps
+    // straight to the first visible one, so a million buffered lines cost the
+    // same as a screenful.
+    let (mut line_index, mut skip_rows) = app.log_layout.locate(scroll);
     let mut rendered_rows: Vec<Vec<char>> = Vec::with_capacity(viewport);
-    for (row, line) in app.logs.iter().skip(scroll).take(viewport).enumerate() {
-        let runs = build_log_runs(app, line, tag_width);
-        draw_runs(buffer, area.x, area.y + row as u16, area.width, &runs);
-        rendered_rows.push(runs_to_columns(&runs, area.width));
+
+    while rendered_rows.len() < viewport && line_index < app.logs.len() {
+        let rows = build_log_rows(app, &app.logs[line_index], tag_width, content_width);
+        for runs in rows.into_iter().skip(skip_rows) {
+            if rendered_rows.len() >= viewport {
+                break;
+            }
+            let row = rendered_rows.len() as u16;
+            draw_runs(buffer, area.x, area.y + row, area.width, &runs);
+            rendered_rows.push(runs_to_columns(&runs, area.width));
+        }
+        skip_rows = 0;
+        line_index += 1;
     }
     app.rendered_log_rows = rendered_rows;
 
@@ -446,15 +461,15 @@ fn draw_logs(buffer: &mut Buffer, layout: &FrameLayout, app: &mut App) {
     }
 }
 
-fn build_log_runs(app: &App, line: &crate::model::TaskRunLogLine, tag_width: usize) -> Runs {
-    let mut runs: Runs = Vec::new();
-
+/// One entry per display row: the first carries the timestamp and task tag, and
+/// wrapped continuations are indented to line up under the message column.
+fn build_log_rows(
+    app: &App,
+    line: &crate::model::TaskRunLogLine,
+    tag_width: usize,
+    content_width: usize,
+) -> Vec<Runs> {
     let timestamp = format_log_timestamp(line.timestamp);
-    runs.push((
-        pad_to_width(&timestamp, LOG_TIMESTAMP_WIDTH),
-        Style::default().fg(GREY),
-    ));
-
     let tag_style = match app
         .log_color_for_task(&line.task)
         .as_deref()
@@ -463,13 +478,28 @@ fn build_log_runs(app: &App, line: &crate::model::TaskRunLogLine, tag_width: usi
         Some(color) => Style::default().fg(color),
         None => Style::default(),
     };
-    runs.push((format_task_tag_for_log(&line.task, tag_width), tag_style));
+    let gutter_width = LOG_TIMESTAMP_WIDTH + tag_width;
 
-    for segment in parse_ansi_log_segments(&line.line) {
-        runs.push((segment.text, log_segment_style(&segment.style)));
-    }
-
-    runs
+    wrap_log_line(&line.line, content_width)
+        .into_iter()
+        .enumerate()
+        .map(|(row, segments)| {
+            let mut runs: Runs = Vec::new();
+            if row == 0 {
+                runs.push((
+                    pad_to_width(&timestamp, LOG_TIMESTAMP_WIDTH),
+                    Style::default().fg(GREY),
+                ));
+                runs.push((format_task_tag_for_log(&line.task, tag_width), tag_style));
+            } else {
+                runs.push((" ".repeat(gutter_width), Style::default()));
+            }
+            for segment in segments {
+                runs.push((segment.text, log_segment_style(&segment.style)));
+            }
+            runs
+        })
+        .collect()
 }
 
 fn log_segment_style(style: &crate::logs::LogTextStyle) -> Style {

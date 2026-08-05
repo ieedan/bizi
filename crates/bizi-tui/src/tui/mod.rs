@@ -29,7 +29,7 @@ use crate::cli::CliOptions;
 use crate::keyboard::{
     IS_MACOS, is_jump_parents_backward_shortcut, is_jump_parents_forward_shortcut,
 };
-use crate::logs::resolve_task_log_color;
+use crate::logs::{count_log_line_rows, resolve_task_log_color};
 use crate::model::{
     DisplayTaskStatus, LogMode, TaskMap, TaskRow, TaskRunLogLine, TaskRunStatus, TaskRunTreeNode,
     TaskTreeNode,
@@ -91,6 +91,38 @@ pub struct RunningTaskRow {
     pub status: TaskRunStatus,
 }
 
+/// Where each log line starts once long lines are wrapped to the log pane's
+/// width. The log view scrolls in display rows rather than log lines, so it
+/// needs this to find the first visible line without wrapping everything above
+/// it — only the lines actually on screen get laid out each frame.
+#[derive(Default)]
+pub struct LogLayout {
+    /// `row_offsets[i]` is the first display row of `logs[i]`.
+    row_offsets: Vec<usize>,
+    total_rows: usize,
+    content_width: usize,
+    tag_width: usize,
+    /// Revision of `App::logs` this layout was built from. Bumped whenever the
+    /// buffer is replaced wholesale so appends can stay incremental.
+    revision: u64,
+}
+
+impl LogLayout {
+    pub fn total_rows(&self) -> usize {
+        self.total_rows
+    }
+
+    /// Index of the log line that owns `row`, plus how far into that line's
+    /// wrapped rows `row` sits.
+    fn locate(&self, row: usize) -> (usize, usize) {
+        if self.row_offsets.is_empty() {
+            return (0, 0);
+        }
+        let index = self.row_offsets.partition_point(|start| *start <= row) - 1;
+        (index, row - self.row_offsets[index])
+    }
+}
+
 pub enum AppEvent {
     Term(Event),
     ClockTick,
@@ -118,6 +150,9 @@ pub struct App {
 
     selected_index: usize,
     logs: Vec<TaskRunLogLine>,
+    log_revision: u64,
+    log_longest_task_name: usize,
+    log_layout: LogLayout,
     log_mode: LogMode,
     focused_pane: Pane,
 
@@ -171,6 +206,9 @@ impl App {
             display_status_by_task_key: DisplayStatusByTaskKey::new(),
             selected_index: 0,
             logs: Vec::new(),
+            log_revision: 0,
+            log_longest_task_name: 0,
+            log_layout: LogLayout::default(),
             log_mode: LogMode::Aggregate,
             focused_pane: Pane::Tasks,
             task_search_query: String::new(),
@@ -324,13 +362,54 @@ impl App {
     }
 
     fn log_task_tag_width(&self) -> usize {
-        let longest = self
-            .logs
+        (self.log_longest_task_name + 3).clamp(10, 40)
+    }
+
+    /// Appends a streamed line, keeping the derived width up to date so the log
+    /// pane never rescans the whole buffer on a redraw.
+    fn append_log(&mut self, log: TaskRunLogLine) {
+        self.log_longest_task_name = self.log_longest_task_name.max(log.task.chars().count());
+        self.logs.push(log);
+    }
+
+    /// Replaces the log buffer. Callers must go through this so the wrapped-row
+    /// layout knows it cannot reuse its cached offsets.
+    fn replace_logs(&mut self, logs: Vec<TaskRunLogLine>) {
+        self.log_longest_task_name = logs
             .iter()
             .map(|line| line.task.chars().count())
             .max()
             .unwrap_or(0);
-        (longest + 3).clamp(10, 40)
+        self.logs = logs;
+        self.log_revision = self.log_revision.wrapping_add(1);
+    }
+
+    /// Brings `log_layout` up to date for the given pane geometry. Appends are
+    /// O(1) per new line; only a width change or a replaced buffer costs a full
+    /// pass over the logs.
+    fn sync_log_layout(&mut self, content_width: usize, tag_width: usize) {
+        let geometry_changed = self.log_layout.content_width != content_width
+            || self.log_layout.tag_width != tag_width;
+        let buffer_replaced = self.log_layout.revision != self.log_revision;
+
+        if geometry_changed || buffer_replaced {
+            self.log_layout.content_width = content_width;
+            self.log_layout.tag_width = tag_width;
+            self.log_layout.revision = self.log_revision;
+            self.log_layout.row_offsets.clear();
+            self.log_layout.total_rows = 0;
+        }
+
+        for line in &self.logs[self.log_layout.row_offsets.len()..] {
+            self.log_layout.row_offsets.push(self.log_layout.total_rows);
+            self.log_layout.total_rows += count_log_line_rows(&line.line, content_width);
+        }
+    }
+
+    /// Columns available to the log message itself, after the timestamp and task
+    /// tag gutters.
+    fn log_content_width(&self, area_width: u16, tag_width: usize) -> usize {
+        (area_width as usize).saturating_sub(ui::LOG_TIMESTAMP_WIDTH + tag_width)
     }
 
     fn log_color_for_task(&self, task_key: &str) -> Option<String> {
@@ -375,7 +454,7 @@ impl App {
     }
 
     fn restart_run_by_id(&mut self, run_id: String) {
-        self.logs.clear();
+        self.replace_logs(Vec::new());
         let api = self.api.clone();
         let cwd = self.cwd.clone();
         let events = self.events.clone();
@@ -478,7 +557,7 @@ impl App {
                 for handle in self.log_handles.drain(..) {
                     handle.abort();
                 }
-                self.logs.clear();
+                self.replace_logs(Vec::new());
             }
             return;
         };
@@ -504,6 +583,10 @@ impl App {
             handle.abort();
         }
 
+        // Matches the TypeScript TUI: the previous run's lines stay on screen
+        // until the new subscription's snapshot replaces them, and the view
+        // jumps back to the bottom for the new selection.
+        self.log_scroll = 0;
         self.log_follow = true;
 
         let api = self.api.clone();
@@ -564,8 +647,8 @@ impl App {
                     return;
                 }
                 match message {
-                    TaskRunLogsStreamMessage::Snapshot { logs, .. } => self.logs = logs,
-                    TaskRunLogsStreamMessage::Log { log } => self.logs.push(log),
+                    TaskRunLogsStreamMessage::Snapshot { logs, .. } => self.replace_logs(logs),
+                    TaskRunLogsStreamMessage::Log { log } => self.append_log(log),
                     TaskRunLogsStreamMessage::Error { message } => {
                         self.error_message = Some(message)
                     }
@@ -839,6 +922,13 @@ impl App {
         if matches!(key.code, KeyCode::Up | KeyCode::Char('k')) {
             if self.selected_index == 0 {
                 self.focus_task_search();
+                // In the TypeScript TUI the search `<input>` is a focused
+                // component, so the same keypress that refocuses it is also
+                // typed into it. Only a printable key lands; Up does not.
+                if let KeyCode::Char(character) = key.code {
+                    self.task_search_query.push(character);
+                    self.show_task_search_error = false;
+                }
                 return true;
             }
             self.selected_index -= 1;
@@ -889,8 +979,8 @@ impl App {
 
     fn scroll_logs_by(&mut self, delta: isize) {
         let max_scroll = self
-            .logs
-            .len()
+            .log_layout
+            .total_rows()
             .saturating_sub(self.log_viewport_height.max(1));
         let current = if self.log_follow {
             max_scroll
