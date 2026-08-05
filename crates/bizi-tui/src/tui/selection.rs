@@ -5,6 +5,7 @@
 //! log row, which keeps every visual row on one line in the copied text.
 
 use std::io::{Write, stdout};
+use std::process::{Command, Stdio};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -111,13 +112,87 @@ pub fn selected_text(rows: &[Vec<char>], area: Rect, selection: &Selection) -> S
     lines.join("\n")
 }
 
-/// Writes an OSC52 clipboard sequence. Terminals that do not implement OSC52
-/// silently ignore it, so this reports success whenever the write itself works.
-pub fn copy_to_clipboard_osc52(text: &str) -> bool {
+/// Puts `text` on the clipboard.
+///
+/// OSC52 alone is not enough: plenty of terminals ignore clipboard writes by
+/// default (iTerm2 ships with them off, Ghostty asks first), and the escape
+/// sequence gives no way to tell. So locally we hand the text to the platform
+/// clipboard helper and only fall back to OSC52, while over SSH — where the
+/// helper would write to the wrong machine's clipboard — we try OSC52 first.
+pub fn copy_to_clipboard(text: &str) -> bool {
+    if is_remote_session() {
+        return copy_to_clipboard_osc52(text) || copy_with_platform_helper(text);
+    }
+    copy_with_platform_helper(text) || copy_to_clipboard_osc52(text)
+}
+
+fn is_remote_session() -> bool {
+    std::env::var_os("SSH_CONNECTION").is_some() || std::env::var_os("SSH_TTY").is_some()
+}
+
+/// Writes an OSC52 clipboard sequence. Terminals that do not implement it (or
+/// have it disabled) drop the sequence silently, so a successful write is not a
+/// guarantee that the clipboard actually changed.
+fn copy_to_clipboard_osc52(text: &str) -> bool {
     let encoded = BASE64.encode(text.as_bytes());
     let mut out = stdout();
     let written = write!(out, "\u{1b}]52;c;{encoded}\u{7}").is_ok();
     written && out.flush().is_ok()
+}
+
+fn copy_with_platform_helper(text: &str) -> bool {
+    clipboard_commands()
+        .iter()
+        .any(|(program, arguments)| pipe_to_command(program, arguments, text))
+}
+
+fn pipe_to_command(program: &str, arguments: &[&str], text: &str) -> bool {
+    let Ok(mut child) = Command::new(program)
+        .args(arguments)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return false;
+    };
+
+    let Some(mut stdin) = child.stdin.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return false;
+    };
+    let written = stdin.write_all(text.as_bytes()).is_ok();
+    drop(stdin);
+
+    match child.wait() {
+        Ok(status) => written && status.success(),
+        Err(_) => false,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn clipboard_commands() -> &'static [(&'static str, &'static [&'static str])] {
+    &[("pbcopy", &[])]
+}
+
+#[cfg(target_os = "windows")]
+fn clipboard_commands() -> &'static [(&'static str, &'static [&'static str])] {
+    &[("clip", &[])]
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn clipboard_commands() -> &'static [(&'static str, &'static [&'static str])] {
+    &[
+        ("wl-copy", &[]),
+        ("xclip", &["-selection", "clipboard"]),
+        ("xsel", &["--clipboard", "--input"]),
+    ]
+}
+
+#[cfg(not(any(unix, target_os = "windows")))]
+fn clipboard_commands() -> &'static [(&'static str, &'static [&'static str])] {
+    &[]
 }
 
 #[cfg(test)]
@@ -178,6 +253,21 @@ mod tests {
         let area = Rect::new(0, 0, 3, 1);
         let selection = Selection::new(area, (1, 0));
         assert_eq!(selected_text(&rows, area, &selection), "");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pipes_text_into_a_helper_process() {
+        assert!(pipe_to_command("cat", &[], "hello"));
+        assert!(
+            !pipe_to_command("false", &[], "hello"),
+            "a non-zero exit means the helper did not take the text"
+        );
+        assert!(!pipe_to_command(
+            "bizi-definitely-not-a-clipboard-helper",
+            &[],
+            "hello"
+        ));
     }
 
     #[test]

@@ -60,7 +60,8 @@ bizi init           # Create a starter task.config.json
 | `q`                       | Quit                                        |
 
 Drag with the mouse over the log pane to select text, then press `ctrl+c` to copy
-it through OSC52.
+it. Copying goes through the platform clipboard (`pbcopy`, `clip`, `wl-copy`/
+`xclip`/`xsel`) and falls back to OSC52, which is what gets used over SSH.
 
 ## Development
 

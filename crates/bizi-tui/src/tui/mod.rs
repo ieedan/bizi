@@ -685,7 +685,7 @@ impl App {
             return false;
         }
 
-        let copied = selection::copy_to_clipboard_osc52(&text);
+        let copied = selection::copy_to_clipboard(&text);
         let line_count = text.lines().count().max(1);
         let lines_label = if line_count == 1 {
             "1 line".to_string()
@@ -695,7 +695,7 @@ impl App {
         self.show_copy_toast(if copied {
             format!("Copied {lines_label} to clipboard")
         } else {
-            "Copy failed (terminal does not support OSC52)".to_string()
+            "Copy failed (no clipboard available)".to_string()
         });
         self.selection = None;
         true

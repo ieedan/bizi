@@ -25,6 +25,8 @@ const SELECTION_FG: Color = Color::Rgb(0xff, 0xff, 0xff);
 const DIALOG_WIDTH: u16 = 84;
 const TASK_PANEL_WIDTH: u16 = 42;
 const LOG_TIMESTAMP_WIDTH: usize = 14;
+/// Row of the search box's bottom border. Rows 1..=3 hold the box itself.
+const SEARCH_BOX_BOTTOM_Y: u16 = 3;
 
 /// A run of text with a single style. Panels are composed from these so they can
 /// be clipped and scrolled without fighting a widget tree.
@@ -96,11 +98,13 @@ fn compute_layout(area: Rect) -> FrameLayout {
     let right_status_y = area.height - 4;
     let right_separator_y = area.height - 5;
 
+    // The task cards start on the row directly below the search box (rows 1..3),
+    // so the search box and the first card share an edge.
     let task_area = Rect {
         x: 2,
-        y: 5,
+        y: SEARCH_BOX_BOTTOM_Y + 1,
         width: divider_x.saturating_sub(3),
-        height: panels_bottom_y.saturating_sub(5),
+        height: panels_bottom_y.saturating_sub(SEARCH_BOX_BOTTOM_Y + 1),
     };
     let log_area = Rect {
         x: divider_x + 2,
@@ -226,14 +230,15 @@ fn draw_search_box(buffer: &mut Buffer, layout: &FrameLayout, app: &App) {
         return;
     }
 
+    let bottom = SEARCH_BOX_BOTTOM_Y;
     draw_str(buffer, x, 1, "┌", style);
-    draw_str(buffer, x, 3, "└", style);
+    draw_str(buffer, x, bottom, "└", style);
     for offset in 1..(width - 1) {
         draw_str(buffer, x + offset, 1, "─", style);
-        draw_str(buffer, x + offset, 3, "─", style);
+        draw_str(buffer, x + offset, bottom, "─", style);
     }
     draw_str(buffer, x + width - 1, 1, "┐", style);
-    draw_str(buffer, x + width - 1, 3, "┘", style);
+    draw_str(buffer, x + width - 1, bottom, "┘", style);
     draw_str(buffer, x, 2, "│", style);
     draw_str(buffer, x + width - 1, 2, "│", style);
 
