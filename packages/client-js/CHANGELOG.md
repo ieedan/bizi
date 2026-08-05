@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ieedan/bizi/compare/client-v0.3.0...client-v0.4.0) (2026-08-05)
+
+
+### Features
+
+* **tui-rs:** add a Rust/ratatui rewrite of the TUI ([#45](https://github.com/ieedan/bizi/issues/45)) ([ae82bef](https://github.com/ieedan/bizi/commit/ae82beff6a806ba60a1acdf2c3ac8faa656d2d5b))
+
 ## [0.3.0](https://github.com/ieedan/bizi/compare/client-v0.2.1...client-v0.3.0) (2026-02-16)
 
 
