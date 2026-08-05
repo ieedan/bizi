@@ -4,522 +4,541 @@
  */
 
 export interface paths {
-    "/api/tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_tasks"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["cancel_task"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks/restart": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["restart_task"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["run_task"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks/runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_task_runs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_task_run"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/tasks/{run_id}/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_task_run_logs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
+	"/api/tasks": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations["list_tasks"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/tasks/cancel": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations["cancel_task"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/tasks/restart": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations["restart_task"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/tasks/run": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post: operations["run_task"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/tasks/runs": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations["list_task_runs"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/tasks/{run_id}": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations["get_task_run"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/tasks/{run_id}/logs": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get: operations["get_task_run_logs"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        CancelTaskRequest: {
-            runId: string;
-        };
-        CancelTaskResponse: components["schemas"]["CancelTaskResponseBody"] | components["schemas"]["ErrorResponse"];
-        CancelTaskResponseBody: {
-            cancelledRunIds: string[];
-        };
-        ErrorResponse: {
-            message: string;
-        };
-        GetTaskRunLogsRequest: {
-            includeChildren?: boolean | null;
-        };
-        GetTaskRunLogsResponse: components["schemas"]["GetTaskRunLogsResponseBody"] | components["schemas"]["ErrorResponse"];
-        GetTaskRunLogsResponseBody: {
-            logs: components["schemas"]["TaskRunLogLine"][];
-            runId: string;
-        };
-        GetTaskRunResponse: components["schemas"]["GetTaskRunResponseBody"] | components["schemas"]["ErrorResponse"];
-        GetTaskRunResponseBody: {
-            taskRun: components["schemas"]["TaskRunTreeNode"];
-        };
-        ListTaskRunsRequest: {
-            /** @example /Users/johndoe/documents/github/example-project */
-            cwd: string;
-        };
-        ListTaskRunsResponse: components["schemas"]["ListTaskRunsResponseBody"] | components["schemas"]["ErrorResponse"];
-        ListTaskRunsResponseBody: {
-            /** @description Root task runs for the cwd, each containing nested child runs. */
-            taskRuns: components["schemas"]["TaskRunTreeNode"][];
-        };
-        ListTasksRequest: {
-            /** @example /Users/johndoe/documents/github/example-project */
-            cwd: string;
-        };
-        ListTasksResponse: components["schemas"]["ListTasksResponseBody"] | components["schemas"]["ErrorResponse"];
-        ListTasksResponseBody: {
-            /** @description The list of tasks that are defined in the task.config.json file */
-            tasks: {
-                [key: string]: components["schemas"]["Task"];
-            };
-        };
-        RestartTaskRequest: {
-            runId: string;
-        };
-        RestartTaskResponse: components["schemas"]["RestartTaskResponseBody"] | components["schemas"]["ErrorResponse"];
-        RestartTaskResponseBody: {
-            runId: string;
-        };
-        StartTaskRequest: {
-            cwd: string;
-            includeTasks?: string[] | null;
-            task: string;
-        };
-        StartTaskResponse: components["schemas"]["StartTaskResponseBody"] | components["schemas"]["ErrorResponse"];
-        StartTaskResponseBody: {
-            runId: string;
-        };
-        Task: {
-            /** @description The color used for client-side log rendering for this task. */
-            color?: string | null;
-            /** @description The command that the task will run. */
-            command?: string | null;
-            /** @description Any other task names that this task depends on. */
-            dependsOn?: string[] | null;
-            dependsOnTasks?: {
-                [key: string]: components["schemas"]["Task"];
-            } | null;
-            /** @description Whether the task is optional. If true, the task will only run if started manually. */
-            optional?: boolean | null;
-            /** @description Subtasks of this task. Keys must be unique task names. */
-            tasks?: {
-                [key: string]: components["schemas"]["Task"];
-            } | null;
-            /** @description The title of the task. */
-            title?: string | null;
-        };
-        TaskRunLogLine: {
-            isStderr: boolean;
-            line: string;
-            runId: string;
-            /** Format: int64 */
-            sequence: number;
-            task: string;
-            /** Format: int64 */
-            timestamp: number;
-        };
-        /** @enum {string} */
-        TaskRunStatus: "Queued" | "Running" | "Success" | "Cancelled" | "Failed";
-        TaskRunTreeNode: {
-            children: components["schemas"]["TaskRunTreeNode"][];
-            cwd: string;
-            id: string;
-            parentRunId?: string | null;
-            status: components["schemas"]["TaskRunStatus"];
-            task: string;
-            /** Format: int64 */
-            updatedAt: number;
-            waitingOn?: string | null;
-        };
-    };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+	schemas: {
+		CancelTaskRequest: {
+			runId: string;
+		};
+		CancelTaskResponse:
+			| components["schemas"]["CancelTaskResponseBody"]
+			| components["schemas"]["ErrorResponse"];
+		CancelTaskResponseBody: {
+			cancelledRunIds: string[];
+		};
+		ErrorResponse: {
+			message: string;
+		};
+		GetTaskRunLogsRequest: {
+			includeChildren?: boolean | null;
+		};
+		GetTaskRunLogsResponse:
+			| components["schemas"]["GetTaskRunLogsResponseBody"]
+			| components["schemas"]["ErrorResponse"];
+		GetTaskRunLogsResponseBody: {
+			logs: components["schemas"]["TaskRunLogLine"][];
+			runId: string;
+		};
+		GetTaskRunResponse:
+			| components["schemas"]["GetTaskRunResponseBody"]
+			| components["schemas"]["ErrorResponse"];
+		GetTaskRunResponseBody: {
+			taskRun: components["schemas"]["TaskRunTreeNode"];
+		};
+		ListTaskRunsRequest: {
+			/** @example /Users/johndoe/documents/github/example-project */
+			cwd: string;
+		};
+		ListTaskRunsResponse:
+			| components["schemas"]["ListTaskRunsResponseBody"]
+			| components["schemas"]["ErrorResponse"];
+		ListTaskRunsResponseBody: {
+			/** @description Root task runs for the cwd, each containing nested child runs. */
+			taskRuns: components["schemas"]["TaskRunTreeNode"][];
+		};
+		ListTasksRequest: {
+			/** @example /Users/johndoe/documents/github/example-project */
+			cwd: string;
+		};
+		ListTasksResponse:
+			| components["schemas"]["ListTasksResponseBody"]
+			| components["schemas"]["ErrorResponse"];
+		ListTasksResponseBody: {
+			/** @description The list of tasks that are defined in the task.config.json file */
+			tasks: {
+				[key: string]: components["schemas"]["Task"];
+			};
+		};
+		RestartTaskRequest: {
+			runId: string;
+		};
+		RestartTaskResponse:
+			| components["schemas"]["RestartTaskResponseBody"]
+			| components["schemas"]["ErrorResponse"];
+		RestartTaskResponseBody: {
+			runId: string;
+		};
+		StartTaskRequest: {
+			cwd: string;
+			includeTasks?: string[] | null;
+			task: string;
+		};
+		StartTaskResponse:
+			| components["schemas"]["StartTaskResponseBody"]
+			| components["schemas"]["ErrorResponse"];
+		StartTaskResponseBody: {
+			runId: string;
+		};
+		Task: {
+			/** @description The color used for client-side log rendering for this task. */
+			color?: string | null;
+			/** @description The command that the task will run. */
+			command?: string | null;
+			/** @description Any other task names that this task depends on. */
+			dependsOn?: string[] | null;
+			dependsOnTasks?: {
+				[key: string]: components["schemas"]["Task"];
+			} | null;
+			/** @description Whether the task is optional. If true, the task will only run if started manually. */
+			optional?: boolean | null;
+			/** @description Subtasks of this task. Keys must be unique task names. */
+			tasks?: {
+				[key: string]: components["schemas"]["Task"];
+			} | null;
+			/** @description The title of the task. */
+			title?: string | null;
+		};
+		TaskRunLogLine: {
+			isStderr: boolean;
+			line: string;
+			runId: string;
+			/** Format: int64 */
+			sequence: number;
+			task: string;
+			/** Format: int64 */
+			timestamp: number;
+		};
+		/** @enum {string} */
+		TaskRunStatus:
+			| "Queued"
+			| "Running"
+			| "Success"
+			| "Cancelled"
+			| "Failed";
+		TaskRunTreeNode: {
+			children: components["schemas"]["TaskRunTreeNode"][];
+			cwd: string;
+			id: string;
+			parentRunId?: string | null;
+			status: components["schemas"]["TaskRunStatus"];
+			task: string;
+			/** Format: int64 */
+			updatedAt: number;
+			waitingOn?: string | null;
+		};
+	};
+	responses: never;
+	parameters: never;
+	requestBodies: never;
+	headers: never;
+	pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    list_tasks: {
-        parameters: {
-            query: {
-                /** @description The current working directory to load the task config from */
-                cwd: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListTasksResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    cancel_task: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CancelTaskRequest"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CancelTaskResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    restart_task: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RestartTaskRequest"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RestartTaskResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    run_task: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StartTaskRequest"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StartTaskResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_task_runs: {
-        parameters: {
-            query: {
-                /** @description The current working directory to load task runs from */
-                cwd: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListTaskRunsResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_task_run: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The task run id */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GetTaskRunResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_task_run_logs: {
-        parameters: {
-            query?: {
-                /** @description Whether to include logs from descendant task runs */
-                includeChildren?: boolean | null;
-            };
-            header?: never;
-            path: {
-                /** @description The task run id */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Success */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GetTaskRunLogsResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
+	list_tasks: {
+		parameters: {
+			query: {
+				/** @description The current working directory to load the task config from */
+				cwd: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Success */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ListTasksResponse"];
+				};
+			};
+			/** @description Not Found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+			/** @description Internal Server Error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+		};
+	};
+	cancel_task: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["CancelTaskRequest"];
+			};
+		};
+		responses: {
+			/** @description Success */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["CancelTaskResponse"];
+				};
+			};
+			/** @description Not Found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+			/** @description Internal Server Error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+		};
+	};
+	restart_task: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["RestartTaskRequest"];
+			};
+		};
+		responses: {
+			/** @description Success */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["RestartTaskResponse"];
+				};
+			};
+			/** @description Not Found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+			/** @description Internal Server Error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+		};
+	};
+	run_task: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["StartTaskRequest"];
+			};
+		};
+		responses: {
+			/** @description Success */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["StartTaskResponse"];
+				};
+			};
+			/** @description Bad Request */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+			/** @description Not Found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+			/** @description Internal Server Error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+		};
+	};
+	list_task_runs: {
+		parameters: {
+			query: {
+				/** @description The current working directory to load task runs from */
+				cwd: string;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Success */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ListTaskRunsResponse"];
+				};
+			};
+			/** @description Internal Server Error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+		};
+	};
+	get_task_run: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				/** @description The task run id */
+				run_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Success */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["GetTaskRunResponse"];
+				};
+			};
+			/** @description Not Found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+			/** @description Internal Server Error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+		};
+	};
+	get_task_run_logs: {
+		parameters: {
+			query?: {
+				/** @description Whether to include logs from descendant task runs */
+				includeChildren?: boolean | null;
+			};
+			header?: never;
+			path: {
+				/** @description The task run id */
+				run_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Success */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["GetTaskRunLogsResponse"];
+				};
+			};
+			/** @description Not Found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+			/** @description Internal Server Error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["ErrorResponse"];
+				};
+			};
+		};
+	};
 }

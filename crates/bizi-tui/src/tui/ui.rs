@@ -804,7 +804,7 @@ fn draw_str(buffer: &mut Buffer, x: u16, y: u16, text: &str, style: Style) {
             break;
         }
         if let Some(cell) = buffer.cell_mut(Position::new(cursor, y)) {
-            cell.set_symbol(&grapheme.to_string());
+            cell.set_symbol(&renderable(grapheme).to_string());
             cell.set_style(style);
         }
         cursor += grapheme_width(grapheme);
@@ -823,7 +823,7 @@ fn draw_runs(buffer: &mut Buffer, x: u16, y: u16, max_width: u16, runs: &[(Strin
                 break;
             }
             if let Some(cell) = buffer.cell_mut(Position::new(cursor, y)) {
-                cell.set_symbol(&character.to_string());
+                cell.set_symbol(&renderable(character).to_string());
                 cell.set_style(*style);
             }
             cursor += grapheme_width(character);
@@ -843,7 +843,7 @@ fn runs_to_columns(runs: &[(String, Style)], max_width: u16) -> Vec<char> {
             if columns.len() >= limit {
                 return columns;
             }
-            columns.push(character);
+            columns.push(renderable(character));
             for _ in 1..grapheme_width(character) {
                 if columns.len() >= limit {
                     return columns;
@@ -860,6 +860,17 @@ fn grapheme_width(character: char) -> u16 {
     unicode_width::UnicodeWidthChar::width(character)
         .unwrap_or(0)
         .max(1) as u16
+}
+
+/// Control characters have no column width of their own but move a real
+/// terminal's cursor when printed, which would put the screen out of step with
+/// what we think we drew. Nothing reaches a cell without passing through here.
+fn renderable(character: char) -> char {
+    if character.is_control() {
+        ' '
+    } else {
+        character
+    }
 }
 
 fn truncate_to_width(text: &str, max_width: usize) -> String {

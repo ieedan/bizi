@@ -16,6 +16,9 @@ const BASIC_TERMINAL_COLORS: [&str; 8] = [
     "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
 ];
 
+/// Columns between tab stops when expanding tabs in log output.
+const TAB_STOP: usize = 8;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LogTextStyle {
     pub fg: Option<String>,
@@ -106,6 +109,7 @@ pub fn parse_ansi_log_segments(line: &str) -> Vec<ParsedLogSegment> {
     let mut current_style = LogTextStyle::default();
     let mut current_text = String::new();
     let mut index = 0usize;
+    let mut visible_column = 0usize;
 
     while index < sanitized.len() {
         let character = sanitized[index];
@@ -136,13 +140,28 @@ pub fn parse_ansi_log_segments(line: &str) -> Vec<ParsedLogSegment> {
             continue;
         }
 
+        // A tab is expanded here rather than passed through. Written into a cell
+        // it counts as one column to us but moves a real terminal to its next
+        // tab stop, which desynchronises the renderer from the screen and eats
+        // the characters that follow.
+        if character == '\t' {
+            let spaces = TAB_STOP - (visible_column % TAB_STOP);
+            for _ in 0..spaces {
+                current_text.push(' ');
+            }
+            visible_column += spaces;
+            index += 1;
+            continue;
+        }
+
         let code = character as u32;
-        if (code < 0x20 || code == 0x7f) && code != 0x09 {
+        if code < 0x20 || code == 0x7f {
             index += 1;
             continue;
         }
 
         current_text.push(character);
+        visible_column += display_width(character);
         index += 1;
     }
 
@@ -590,6 +609,38 @@ mod tests {
         rows.iter()
             .map(|row| row.iter().map(|segment| segment.text.as_str()).collect())
             .collect()
+    }
+
+    #[test]
+    fn expands_tabs_to_the_next_tab_stop() {
+        // A raw tab written into a cell counts as one column but moves the
+        // terminal to its next tab stop, which used to swallow the characters
+        // that followed it.
+        assert_eq!(sanitize_log_for_display("ab\tcd"), "ab      cd");
+        assert_eq!(sanitize_log_for_display("abcdefg\th"), "abcdefg h");
+        assert_eq!(sanitize_log_for_display("abcdefgh\ti"), "abcdefgh        i");
+        assert_eq!(sanitize_log_for_display("\tx"), "        x");
+    }
+
+    #[test]
+    fn never_emits_a_control_character() {
+        let line = "a\tb\u{7}c\u{1}d";
+        for segment in parse_ansi_log_segments(line) {
+            assert!(
+                !segment.text.chars().any(char::is_control),
+                "control character survived: {:?}",
+                segment.text
+            );
+        }
+    }
+
+    #[test]
+    fn tab_expansion_counts_toward_the_wrapped_width() {
+        // The wrap must measure the expanded tab, not the single `\t` char.
+        for row in wrap_log_line("ab\tcd efgh", 10) {
+            let rendered: String = row.iter().map(|segment| segment.text.as_str()).collect();
+            assert!(rendered.width() <= 10, "{rendered:?}");
+        }
     }
 
     #[test]
