@@ -650,16 +650,7 @@ fn draw_footer(buffer: &mut Buffer, layout: &FrameLayout, app: &App) {
 // ----------------------------------------------------------- quit dialog
 
 fn draw_quit_confirmation(buffer: &mut Buffer, area: Rect, app: &App) {
-    // The overlay blacks out the whole screen before drawing the dialog.
-    for y in area.y..(area.y + area.height) {
-        for x in area.x..(area.x + area.width) {
-            if let Some(cell) = buffer.cell_mut(Position::new(x, y)) {
-                cell.set_symbol(" ")
-                    .set_fg(Color::Reset)
-                    .set_bg(Color::Rgb(0, 0, 0));
-            }
-        }
-    }
+    blank_area(buffer, area);
 
     let running_tasks = app.running_task_rows();
     let width = DIALOG_WIDTH.min(area.width.saturating_sub(2));
@@ -775,6 +766,23 @@ fn draw_quit_confirmation(buffer: &mut Buffer, area: Rect, app: &App) {
             );
         }
         button_x += button_width + 1;
+    }
+}
+
+/// Blacks out `area` so an overlay can be drawn on top of it.
+///
+/// Resets each cell rather than just recolouring it. Setting only the symbol and
+/// the colours leaves the cell's modifiers behind, so a blanked run of underlined
+/// log output — a dev server printing its URL, say — keeps drawing its underline
+/// and streaks a line across the overlay.
+fn blank_area(buffer: &mut Buffer, area: Rect) {
+    for y in area.y..(area.y + area.height) {
+        for x in area.x..(area.x + area.width) {
+            if let Some(cell) = buffer.cell_mut(Position::new(x, y)) {
+                cell.reset();
+                cell.set_bg(Color::Rgb(0, 0, 0));
+            }
+        }
     }
 }
 
@@ -930,6 +938,32 @@ mod tests {
     fn collapses_whitespace_like_the_typescript_ui() {
         assert_eq!(collapse_whitespace("  a \n b  "), "a b");
         assert_eq!(collapse_whitespace(""), "");
+    }
+
+    #[test]
+    fn blanking_clears_styling_the_overlay_would_otherwise_show_through() {
+        let area = Rect::new(0, 0, 4, 1);
+        let mut buffer = Buffer::empty(area);
+        // What a log line carrying an ANSI underline leaves behind.
+        let cell = buffer.cell_mut(Position::new(1, 0)).unwrap();
+        cell.set_symbol("x");
+        cell.set_style(
+            Style::default()
+                .fg(Color::Red)
+                .add_modifier(Modifier::UNDERLINED | Modifier::BOLD),
+        );
+
+        blank_area(&mut buffer, area);
+
+        let cell = buffer.cell(Position::new(1, 0)).unwrap();
+        assert_eq!(cell.symbol(), " ");
+        assert_eq!(cell.fg, Color::Reset);
+        assert_eq!(cell.bg, Color::Rgb(0, 0, 0));
+        assert!(
+            cell.modifier.is_empty(),
+            "modifiers survived blanking: {:?}",
+            cell.modifier
+        );
     }
 
     #[test]
