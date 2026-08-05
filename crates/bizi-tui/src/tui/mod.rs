@@ -8,11 +8,13 @@ use std::io::{Stdout, stdout};
 use anyhow::Result;
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
-    MouseButton, MouseEventKind,
+    KeyboardEnhancementFlags, MouseButton, MouseEventKind, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    supports_keyboard_enhancement,
 };
 use futures_util::StreamExt;
 use ratatui::Terminal;
@@ -976,7 +978,7 @@ pub async fn run_tui(options: CliOptions) -> Result<()> {
     let (tx, mut rx) = mpsc::channel::<AppEvent>(4096);
     let mut app = App::new(BiziApi::new(), options.cwd.clone(), tx.clone());
 
-    let mut terminal = setup_terminal()?;
+    let (mut terminal, keyboard_enhanced) = setup_terminal()?;
 
     app.spawn_refresh_tasks();
     app.spawn_refresh_runs();
@@ -995,7 +997,7 @@ pub async fn run_tui(options: CliOptions) -> Result<()> {
         handle.abort();
     }
 
-    restore_terminal(&mut terminal)?;
+    restore_terminal(&mut terminal, keyboard_enhanced)?;
     result
 }
 
@@ -1070,16 +1072,32 @@ fn spawn_background_tasks(tx: mpsc::Sender<AppEvent>) -> Vec<JoinHandle<()>> {
     handles
 }
 
-fn setup_terminal() -> Result<Terminal<Backend>> {
+fn setup_terminal() -> Result<(Terminal<Backend>, bool)> {
     enable_raw_mode()?;
     let mut out = stdout();
     execute!(out, EnterAlternateScreen, EnableMouseCapture)?;
+
+    // Ask for the kitty keyboard protocol. Without it Cmd+C never reaches us at
+    // all — the terminal keeps it for its own copy binding — and Cmd+C is what
+    // people actually press on macOS. opentui negotiated this for the
+    // TypeScript TUI, which is why its `key.super` branch was ever reachable.
+    let keyboard_enhanced = supports_keyboard_enhancement().unwrap_or(false);
+    if keyboard_enhanced {
+        let _ = execute!(
+            out,
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+        );
+    }
+
     let terminal = Terminal::new(CrosstermBackend::new(out))?;
-    Ok(terminal)
+    Ok((terminal, keyboard_enhanced))
 }
 
-fn restore_terminal(terminal: &mut Terminal<Backend>) -> Result<()> {
+fn restore_terminal(terminal: &mut Terminal<Backend>, keyboard_enhanced: bool) -> Result<()> {
     disable_raw_mode()?;
+    if keyboard_enhanced {
+        let _ = execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags);
+    }
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,

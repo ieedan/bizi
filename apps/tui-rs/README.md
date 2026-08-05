@@ -56,12 +56,14 @@ bizi init           # Create a starter task.config.json
 | `r`                       | Run or restart the selected task            |
 | `c`                       | Cancel the selected run                     |
 | `m`                       | Toggle aggregated vs. own logs              |
-| `ctrl+c`                  | Copy the log selection, or quit             |
+| `cmd+c` / `ctrl+c`        | Copy the log selection (`ctrl+c` also quits) |
 | `q`                       | Quit                                        |
 
-Drag with the mouse over the log pane to select text, then press `ctrl+c` to copy
-it. Copying goes through the platform clipboard (`pbcopy`, `clip`, `wl-copy`/
-`xclip`/`xsel`) and falls back to OSC52, which is what gets used over SSH.
+Drag with the mouse over the log pane to select text, then press `cmd+c` (or
+`ctrl+c`) to copy it. Copying goes through the platform clipboard (`pbcopy`,
+`clip`, `wl-copy`/`xclip`/`xsel`) and falls back to OSC52, which is what gets
+used over SSH. `cmd+c` needs a terminal that speaks the kitty keyboard protocol
+(Kitty, Ghostty, WezTerm, recent iTerm2); everywhere else use `ctrl+c`.
 
 ## Development
 
