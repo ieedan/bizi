@@ -1,0 +1,37 @@
+[package]
+name = "bizi-tui"
+version = "0.0.0"
+edition = "2024"
+description = "Terminal UI and CLI client for the bizi task runner"
+repository = "https://github.com/ieedan/bizi"
+homepage = "https://getbizi.dev"
+license = "MIT"
+
+[[bin]]
+name = "bizi"
+path = "src/main.rs"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "time",
+    "sync",
+    "signal",
+    "fs",
+    "io-std",
+    "io-util",
+] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+indexmap = { version = "2", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+base64 = "0.22"
+unicode-width = "0.2"

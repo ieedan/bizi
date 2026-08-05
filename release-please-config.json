@@ -12,6 +12,18 @@
         "tui-win32-x64",
         "tui-win32-arm64"
       ]
+    },
+    {
+      "type": "linked-versions",
+      "groupName": "tui-rs",
+      "components": [
+        "tui-rs-crate",
+        "tui-rs",
+        "tui-rs-darwin-arm64",
+        "tui-rs-darwin-x64",
+        "tui-rs-win32-x64",
+        "tui-rs-win32-arm64"
+      ]
     }
   ],
   "packages": {
@@ -42,6 +54,30 @@
     "apps/tui/packages/bizi-win32-arm64": {
       "release-type": "node",
       "component": "tui-win32-arm64"
+    },
+    "crates/bizi-tui": {
+      "release-type": "rust",
+      "component": "tui-rs-crate"
+    },
+    "apps/tui-rs": {
+      "release-type": "node",
+      "component": "tui-rs"
+    },
+    "apps/tui-rs/packages/bizi-rs-darwin-arm64": {
+      "release-type": "node",
+      "component": "tui-rs-darwin-arm64"
+    },
+    "apps/tui-rs/packages/bizi-rs-darwin-x64": {
+      "release-type": "node",
+      "component": "tui-rs-darwin-x64"
+    },
+    "apps/tui-rs/packages/bizi-rs-win32-x64": {
+      "release-type": "node",
+      "component": "tui-rs-win32-x64"
+    },
+    "apps/tui-rs/packages/bizi-rs-win32-arm64": {
+      "release-type": "node",
+      "component": "tui-rs-win32-arm64"
     }
   }
 }

@@ -1,0 +1,6 @@
+# compiled platform binaries (produced by scripts/build.mjs)
+packages/*/bin/bizi
+packages/*/bin/bizi.exe
+
+node_modules
+*.tgz

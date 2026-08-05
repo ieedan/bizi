@@ -12,6 +12,7 @@ jobs:
     outputs:
       publish_client: ${{ steps.resolve.outputs.publish_client }}
       publish_tui: ${{ steps.resolve.outputs.publish_tui }}
+      publish_tui_rs: ${{ steps.resolve.outputs.publish_tui_rs }}
       publish_server: ${{ steps.resolve.outputs.publish_server }}
       released_paths_json: ${{ steps.resolve.outputs.released_paths_json }}
       server_tag: ${{ steps.server-tag.outputs.tag }}
@@ -27,12 +28,19 @@ jobs:
             const isTuiPath = (path) =>
               path === 'apps/tui' || path.startsWith('apps/tui/packages/');
 
+            const isTuiRsPath = (path) =>
+              path === 'apps/tui-rs' ||
+              path.startsWith('apps/tui-rs/packages/') ||
+              path === 'crates/bizi-tui';
+
             const publishClient = releasedPaths.includes('packages/client-js');
             const publishTui = releasedPaths.some(isTuiPath);
+            const publishTuiRs = releasedPaths.some(isTuiRsPath);
             const publishServer = releasedPaths.includes('crates/bizi-server');
 
             core.setOutput('publish_client', String(publishClient));
             core.setOutput('publish_tui', String(publishTui));
+            core.setOutput('publish_tui_rs', String(publishTuiRs));
             core.setOutput('publish_server', String(publishServer));
             core.setOutput('released_paths_json', JSON.stringify(releasedPaths));
 
@@ -248,3 +256,109 @@ jobs:
 
       - name: Publish main TUI package
         run: pnpm publish ./apps/tui --access public --provenance
+
+  build-tui-rs-macos:
+    needs: [resolve-release-set]
+    if: ${{ needs.resolve-release-set.outputs.publish_tui_rs == 'true' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      - name: Build (aarch64-apple-darwin, x86_64-apple-darwin)
+        run: |
+          cargo build -p bizi-tui --release --target aarch64-apple-darwin
+          cargo build -p bizi-tui --release --target x86_64-apple-darwin
+
+      - name: Stage binaries
+        run: |
+          mkdir -p artifacts
+          cp target/aarch64-apple-darwin/release/bizi artifacts/bizi-darwin-arm64
+          cp target/x86_64-apple-darwin/release/bizi artifacts/bizi-darwin-x64
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bizi-tui-rs-darwin
+          path: artifacts/
+
+  build-tui-rs-windows:
+    needs: [resolve-release-set]
+    if: ${{ needs.resolve-release-set.outputs.publish_tui_rs == 'true' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
+
+      - name: Build (x86_64-pc-windows-msvc, aarch64-pc-windows-msvc)
+        run: |
+          cargo build -p bizi-tui --release --target x86_64-pc-windows-msvc
+          cargo build -p bizi-tui --release --target aarch64-pc-windows-msvc
+
+      - name: Stage binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/bizi.exe artifacts/bizi-win32-x64.exe
+          Copy-Item target/aarch64-pc-windows-msvc/release/bizi.exe artifacts/bizi-win32-arm64.exe
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bizi-tui-rs-windows
+          path: artifacts/
+
+  publish-tui-rs:
+    needs: [resolve-release-set, build-tui-rs-macos, build-tui-rs-windows]
+    if: ${{ needs.resolve-release-set.outputs.publish_tui_rs == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node for OIDC token exchange
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download built binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bizi-tui-rs-*
+          merge-multiple: true
+          path: artifacts
+
+      - name: Place binaries in their platform packages
+        run: |
+          set -euo pipefail
+          install -m 755 artifacts/bizi-darwin-arm64 apps/tui-rs/packages/bizi-rs-darwin-arm64/bin/bizi
+          install -m 755 artifacts/bizi-darwin-x64 apps/tui-rs/packages/bizi-rs-darwin-x64/bin/bizi
+          install -m 755 artifacts/bizi-win32-x64.exe apps/tui-rs/packages/bizi-rs-win32-x64/bin/bizi.exe
+          install -m 755 artifacts/bizi-win32-arm64.exe apps/tui-rs/packages/bizi-rs-win32-arm64/bin/bizi.exe
+
+      - name: Publish TUI platform packages first
+        run: |
+          pnpm publish ./apps/tui-rs/packages/bizi-rs-darwin-arm64 --access public --provenance
+          pnpm publish ./apps/tui-rs/packages/bizi-rs-darwin-x64 --access public --provenance
+          pnpm publish ./apps/tui-rs/packages/bizi-rs-win32-x64 --access public --provenance
+          pnpm publish ./apps/tui-rs/packages/bizi-rs-win32-arm64 --access public --provenance
+
+      - name: Publish main TUI package
+        run: pnpm publish ./apps/tui-rs --access public --provenance
