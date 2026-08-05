@@ -1,15 +1,15 @@
 {
   "crates/bizi-server": "0.5.0",
-  "packages/client-js": "0.3.0",
+  "packages/client-js": "0.4.0",
   "apps/tui": "0.7.0",
   "apps/tui/packages/bizi-darwin-arm64": "0.7.0",
   "apps/tui/packages/bizi-darwin-x64": "0.7.0",
   "apps/tui/packages/bizi-win32-x64": "0.7.0",
   "apps/tui/packages/bizi-win32-arm64": "0.7.0",
-  "crates/bizi-tui": "0.0.0",
-  "apps/tui-rs": "0.0.0",
-  "apps/tui-rs/packages/bizi-rs-darwin-arm64": "0.0.0",
-  "apps/tui-rs/packages/bizi-rs-darwin-x64": "0.0.0",
-  "apps/tui-rs/packages/bizi-rs-win32-x64": "0.0.0",
-  "apps/tui-rs/packages/bizi-rs-win32-arm64": "0.0.0"
+  "crates/bizi-tui": "0.1.0",
+  "apps/tui-rs": "0.1.0",
+  "apps/tui-rs/packages/bizi-rs-darwin-arm64": "0.1.0",
+  "apps/tui-rs/packages/bizi-rs-darwin-x64": "0.1.0",
+  "apps/tui-rs/packages/bizi-rs-win32-x64": "0.1.0",
+  "apps/tui-rs/packages/bizi-rs-win32-arm64": "0.1.0"
 }
