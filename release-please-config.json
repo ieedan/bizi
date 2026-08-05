@@ -57,27 +57,33 @@
     },
     "crates/bizi-tui": {
       "release-type": "rust",
-      "component": "tui-rs-crate"
+      "component": "tui-rs-crate",
+      "initial-version": "0.1.0"
     },
     "apps/tui-rs": {
       "release-type": "node",
-      "component": "tui-rs"
+      "component": "tui-rs",
+      "initial-version": "0.1.0"
     },
     "apps/tui-rs/packages/bizi-rs-darwin-arm64": {
       "release-type": "node",
-      "component": "tui-rs-darwin-arm64"
+      "component": "tui-rs-darwin-arm64",
+      "initial-version": "0.1.0"
     },
     "apps/tui-rs/packages/bizi-rs-darwin-x64": {
       "release-type": "node",
-      "component": "tui-rs-darwin-x64"
+      "component": "tui-rs-darwin-x64",
+      "initial-version": "0.1.0"
     },
     "apps/tui-rs/packages/bizi-rs-win32-x64": {
       "release-type": "node",
-      "component": "tui-rs-win32-x64"
+      "component": "tui-rs-win32-x64",
+      "initial-version": "0.1.0"
     },
     "apps/tui-rs/packages/bizi-rs-win32-arm64": {
       "release-type": "node",
-      "component": "tui-rs-win32-arm64"
+      "component": "tui-rs-win32-arm64",
+      "initial-version": "0.1.0"
     }
   }
 }
