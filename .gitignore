@@ -6,5 +6,7 @@ packages/bizi-*/bin/*
 !packages/bizi-*/bin/.gitkeep
 apps/tui/packages/bizi-*/bin/*
 !apps/tui/packages/bizi-*/bin/.gitkeep
+apps/tui-rs/packages/bizi-rs-*/bin/*
+!apps/tui-rs/packages/bizi-rs-*/bin/.gitkeep
 
 .DS_Store

@@ -355,10 +355,10 @@ jobs:
 
       - name: Publish TUI platform packages first
         run: |
-          pnpm publish ./apps/tui-rs/packages/bizi-rs-darwin-arm64 --access public --provenance
-          pnpm publish ./apps/tui-rs/packages/bizi-rs-darwin-x64 --access public --provenance
-          pnpm publish ./apps/tui-rs/packages/bizi-rs-win32-x64 --access public --provenance
-          pnpm publish ./apps/tui-rs/packages/bizi-rs-win32-arm64 --access public --provenance
+          pnpm publish ./apps/tui-rs/packages/bizi-rs-darwin-arm64 --access public --provenance --no-git-checks
+          pnpm publish ./apps/tui-rs/packages/bizi-rs-darwin-x64 --access public --provenance --no-git-checks
+          pnpm publish ./apps/tui-rs/packages/bizi-rs-win32-x64 --access public --provenance --no-git-checks
+          pnpm publish ./apps/tui-rs/packages/bizi-rs-win32-arm64 --access public --provenance --no-git-checks
 
       - name: Publish main TUI package
-        run: pnpm publish ./apps/tui-rs --access public --provenance
+        run: pnpm publish ./apps/tui-rs --access public --provenance --no-git-checks
