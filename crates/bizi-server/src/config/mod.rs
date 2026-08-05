@@ -1,25 +1,8 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::{io::ErrorKind, path::Path};
-use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Task {
-    /// The title of the task.
-    pub title: Option<String>,
-    /// The color used for client-side log rendering for this task.
-    pub color: Option<String>,
-    /// The command that the task will run.
-    pub command: Option<String>,
-    /// Any other task names that this task depends on.
-    pub depends_on: Option<Vec<String>>,
-    /// Whether the task is optional. If true, the task will only run if started manually.
-    pub optional: Option<bool>,
-    /// Subtasks of this task. Keys must be unique task names.
-    pub tasks: Option<IndexMap<String, Task>>,
-    pub depends_on_tasks: Option<IndexMap<String, Task>>,
-}
+pub use bizi_api::Task;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {

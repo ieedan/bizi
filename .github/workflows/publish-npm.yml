@@ -14,6 +14,7 @@ jobs:
       publish_tui: ${{ steps.resolve.outputs.publish_tui }}
       publish_tui_rs: ${{ steps.resolve.outputs.publish_tui_rs }}
       publish_server: ${{ steps.resolve.outputs.publish_server }}
+      publish_api: ${{ steps.resolve.outputs.publish_api }}
       released_paths_json: ${{ steps.resolve.outputs.released_paths_json }}
       server_tag: ${{ steps.server-tag.outputs.tag }}
     steps:
@@ -37,11 +38,13 @@ jobs:
             const publishTui = releasedPaths.some(isTuiPath);
             const publishTuiRs = releasedPaths.some(isTuiRsPath);
             const publishServer = releasedPaths.includes('crates/bizi-server');
+            const publishApi = releasedPaths.includes('crates/bizi-api');
 
             core.setOutput('publish_client', String(publishClient));
             core.setOutput('publish_tui', String(publishTui));
             core.setOutput('publish_tui_rs', String(publishTuiRs));
             core.setOutput('publish_server', String(publishServer));
+            core.setOutput('publish_api', String(publishApi));
             core.setOutput('released_paths_json', JSON.stringify(releasedPaths));
 
       - uses: actions/checkout@v4
@@ -57,9 +60,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-server:
+  publish-api:
     needs: [resolve-release-set]
-    if: ${{ needs.resolve-release-set.outputs.publish_server == 'true' }}
+    if: ${{ needs.resolve-release-set.outputs.publish_api == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC token exchange
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
+      - name: Publish api crate
+        run: cargo publish -p bizi-api
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  publish-server:
+    # bizi-server depends on bizi-api by version, so the contract crate has to
+    # reach crates.io first. `always()` keeps this running on the far more common
+    # release where only the server changed and publish-api is skipped.
+    needs: [resolve-release-set, publish-api]
+    if: ${{ always() && needs.resolve-release-set.outputs.publish_server == 'true' && needs.publish-api.result != 'failure' && needs.publish-api.result != 'cancelled' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
