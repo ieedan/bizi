@@ -101,7 +101,7 @@ fn build_node(
     let status = display_status_by_task_key.get(task_key).copied().flatten();
     let icon = task_status_display(status).icon.to_string();
     let mut child_keys = get_direct_child_task_keys(tasks, task_key);
-    child_keys.sort();
+    child_keys.sort_by(|left, right| locale_compare(left, right));
 
     TaskStatusTreeNode {
         task: task_key.to_string(),
@@ -146,6 +146,28 @@ fn visit(node: &TaskStatusTreeNode, prefix: &str, is_last: bool, lines: &mut Vec
     }
 }
 
+/// Approximates `String.prototype.localeCompare`, which `commands/stat.ts` uses
+/// to order sibling tasks. Unlike a plain byte comparison it is case-insensitive
+/// first — so `build` sorts before `Stage`, not after it — and only falls back
+/// to case (lowercase first) to break an otherwise exact tie.
+fn locale_compare(left: &str, right: &str) -> std::cmp::Ordering {
+    let folded = left.to_lowercase().cmp(&right.to_lowercase());
+    if folded != std::cmp::Ordering::Equal {
+        return folded;
+    }
+
+    for (left_char, right_char) in left.chars().zip(right.chars()) {
+        if left_char == right_char {
+            continue;
+        }
+        return left_char
+            .is_uppercase()
+            .cmp(&right_char.is_uppercase())
+            .then(left_char.cmp(&right_char));
+    }
+    left.len().cmp(&right.len())
+}
+
 fn format_status_label(status: Option<&str>) -> &str {
     status.unwrap_or("Idle")
 }
@@ -175,6 +197,22 @@ mod tests {
         );
         assert_eq!(DisplayTaskStatus::Indeterminate.label(), "Indeterminate");
         assert_eq!(format_status_label(None), "Idle");
+    }
+
+    #[test]
+    fn orders_siblings_like_locale_compare() {
+        let mut keys = vec![
+            "a:Stage".to_string(),
+            "a:build".to_string(),
+            "a:CI".to_string(),
+            "a:Deploy".to_string(),
+        ];
+        keys.sort_by(|left, right| locale_compare(left, right));
+        assert_eq!(keys, vec!["a:build", "a:CI", "a:Deploy", "a:Stage"]);
+
+        // Case only breaks ties between otherwise equal keys, lowercase first.
+        assert_eq!(locale_compare("a", "A"), std::cmp::Ordering::Less);
+        assert_eq!(locale_compare("api", "api"), std::cmp::Ordering::Equal);
     }
 
     #[test]

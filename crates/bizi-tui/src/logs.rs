@@ -5,7 +5,7 @@
 //! subset we can render and drop everything else.
 
 use chrono::{Local, TimeZone};
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 const ANSI_16_COLOR_HEX: [&str; 16] = [
     "#000000", "#aa0000", "#00aa00", "#aa5500", "#0000aa", "#aa00aa", "#00aaaa", "#aaaaaa",
@@ -168,6 +168,116 @@ fn flush_segment(
         text: std::mem::take(current_text),
         style: style.clone(),
     });
+}
+
+/// Splits a log line into the display rows the log pane renders, word wrapping
+/// at `width` columns the way the TypeScript TUI's `<text>` box does. Styling
+/// flows across the wrap points, so a colored span split over two rows keeps its
+/// color on both.
+pub fn wrap_log_line(line: &str, width: usize) -> Vec<Vec<ParsedLogSegment>> {
+    let segments = parse_ansi_log_segments(line);
+    let (characters, style_ids) = flatten_segments(&segments);
+
+    wrap_ranges(&characters, width)
+        .into_iter()
+        .map(|(start, end)| collect_row(&segments, &characters, &style_ids, start, end))
+        .collect()
+}
+
+/// Number of display rows `wrap_log_line` would produce. Used to lay the log
+/// viewport out without materializing rows for lines that are scrolled away.
+pub fn count_log_line_rows(line: &str, width: usize) -> usize {
+    let segments = parse_ansi_log_segments(line);
+    let (characters, _) = flatten_segments(&segments);
+    wrap_ranges(&characters, width).len()
+}
+
+fn flatten_segments(segments: &[ParsedLogSegment]) -> (Vec<char>, Vec<usize>) {
+    let mut characters = Vec::new();
+    let mut style_ids = Vec::new();
+    for (index, segment) in segments.iter().enumerate() {
+        for character in segment.text.chars() {
+            characters.push(character);
+            style_ids.push(index);
+        }
+    }
+    (characters, style_ids)
+}
+
+fn collect_row(
+    segments: &[ParsedLogSegment],
+    characters: &[char],
+    style_ids: &[usize],
+    start: usize,
+    end: usize,
+) -> Vec<ParsedLogSegment> {
+    let mut row: Vec<ParsedLogSegment> = Vec::new();
+    for index in start..end {
+        let style_id = style_ids[index];
+        match row.last_mut() {
+            Some(last) if segments[style_id].style == last.style => {
+                last.text.push(characters[index])
+            }
+            _ => row.push(ParsedLogSegment {
+                text: characters[index].to_string(),
+                style: segments[style_id].style.clone(),
+            }),
+        }
+    }
+    row
+}
+
+/// Greedy word wrap. Rows are contiguous slices of the original text so nothing
+/// is reordered or duplicated; the single space a row breaks on is consumed, and
+/// a word longer than `width` is hard broken.
+fn wrap_ranges(characters: &[char], width: usize) -> Vec<(usize, usize)> {
+    let width = width.max(1);
+    if characters.is_empty() {
+        return vec![(0, 0)];
+    }
+
+    let mut rows = Vec::new();
+    let mut row_start = 0usize;
+    let mut cursor = 0usize;
+    let mut row_width = 0usize;
+    let mut last_space: Option<usize> = None;
+
+    while cursor < characters.len() {
+        let character_width = display_width(characters[cursor]);
+        // `cursor > row_start` keeps every row at least one character wide, so a
+        // character wider than the viewport cannot spin the loop forever.
+        if row_width + character_width > width && cursor > row_start {
+            let (row_end, mut next_start) = match last_space {
+                Some(space) if space > row_start => (space, space + 1),
+                _ => (cursor, cursor),
+            };
+            // A row never starts with the whitespace it wrapped on.
+            while next_start < characters.len() && characters[next_start] == ' ' {
+                next_start += 1;
+            }
+            rows.push((row_start, row_end));
+            row_start = next_start;
+            cursor = next_start;
+            row_width = 0;
+            last_space = None;
+            continue;
+        }
+
+        if characters[cursor] == ' ' {
+            last_space = Some(cursor);
+        }
+        row_width += character_width;
+        cursor += 1;
+    }
+
+    if row_start < characters.len() || rows.is_empty() {
+        rows.push((row_start, characters.len()));
+    }
+    rows
+}
+
+fn display_width(character: char) -> usize {
+    UnicodeWidthChar::width(character).unwrap_or(0).max(1)
 }
 
 pub fn format_log_timestamp(timestamp_ms: i64) -> String {
@@ -474,6 +584,66 @@ mod tests {
         assert_eq!(format_elapsed_duration(1500), "1s");
         assert_eq!(format_elapsed_duration(61_000), "1m 1s");
         assert_eq!(format_elapsed_duration(3_601_000), "1h 0m");
+    }
+
+    fn row_texts(rows: &[Vec<ParsedLogSegment>]) -> Vec<String> {
+        rows.iter()
+            .map(|row| row.iter().map(|segment| segment.text.as_str()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn wraps_on_word_boundaries_and_consumes_the_break_space() {
+        let rows = wrap_log_line("alpha bravo charlie", 12);
+        assert_eq!(row_texts(&rows), vec!["alpha bravo", "charlie"]);
+        assert_eq!(count_log_line_rows("alpha bravo charlie", 12), 2);
+    }
+
+    #[test]
+    fn hard_breaks_words_longer_than_the_viewport() {
+        let rows = wrap_log_line(&"A".repeat(10), 4);
+        assert_eq!(row_texts(&rows), vec!["AAAA", "AAAA", "AA"]);
+    }
+
+    #[test]
+    fn keeps_styling_across_a_wrap_point() {
+        let rows = wrap_log_line("\u{1b}[31mredredred green\u{1b}[0m", 9);
+        assert_eq!(row_texts(&rows), vec!["redredred", "green"]);
+        for row in &rows {
+            assert_eq!(row[0].style.fg.as_deref(), Some("#aa0000"));
+        }
+    }
+
+    #[test]
+    fn always_produces_at_least_one_row() {
+        assert_eq!(count_log_line_rows("", 20), 1);
+        assert_eq!(count_log_line_rows("abc", 0), 3);
+    }
+
+    #[test]
+    fn wrapped_rows_never_exceed_the_viewport_width() {
+        let line = "the quick brown fox jumps over the lazy dog";
+        for width in 1..=40 {
+            for row in wrap_log_line(line, width) {
+                let rendered: String = row.iter().map(|segment| segment.text.as_str()).collect();
+                assert!(
+                    rendered.width() <= width.max(1),
+                    "width {width}: {rendered:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn row_counts_agree_with_the_rendered_rows() {
+        let line = "\u{1b}[32mstatus\u{1b}[0m compiling a fairly long crate name here";
+        for width in 1..=40 {
+            assert_eq!(
+                count_log_line_rows(line, width),
+                wrap_log_line(line, width).len(),
+                "width {width}"
+            );
+        }
     }
 
     #[test]
