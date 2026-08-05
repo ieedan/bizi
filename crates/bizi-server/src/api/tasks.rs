@@ -416,8 +416,12 @@ pub enum GetTaskRunLogsResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+// `rename_all` on a tagged enum only renames the variant names, so struct
+// variants with multi-word fields need their own `rename_all` to keep the wire
+// format camelCase like the rest of the API.
 #[serde(tag = "type", rename_all = "camelCase")]
 enum TaskRunLogsStreamMessage {
+    #[serde(rename_all = "camelCase")]
     Snapshot {
         run_id: String,
         logs: Vec<TaskRunLogLine>,
@@ -1979,6 +1983,18 @@ mod tests {
         assert_eq!(
             normalize_terminal_log_line(input),
             "\u{1b}[32mdone\u{1b}[0m"
+        );
+    }
+
+    #[test]
+    fn log_stream_snapshot_serializes_run_id_as_camel_case() {
+        let snapshot = super::TaskRunLogsStreamMessage::Snapshot {
+            run_id: "r1".to_string(),
+            logs: Vec::new(),
+        };
+        assert_eq!(
+            serde_json::to_string(&snapshot).unwrap(),
+            r#"{"type":"snapshot","runId":"r1","logs":[]}"#
         );
     }
 }

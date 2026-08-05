@@ -504,6 +504,10 @@ impl App {
             handle.abort();
         }
 
+        // Drop the previous run's lines so the pane never mixes two tasks while
+        // the new snapshot is still in flight.
+        self.logs.clear();
+        self.log_scroll = 0;
         self.log_follow = true;
 
         let api = self.api.clone();
