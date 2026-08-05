@@ -1,6 +1,6 @@
 [package]
 name = "bizi-tui"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 description = "Terminal UI and CLI client for the bizi task runner"
 repository = "https://github.com/ieedan/bizi"
