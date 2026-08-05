@@ -1,0 +1,32 @@
+{
+  "name": "bizi-rs",
+  "version": "0.0.0",
+  "description": "Terminal UI for bizi, written in Rust",
+  "license": "MIT",
+  "repository": "https://github.com/ieedan/bizi",
+  "homepage": "https://getbizi.dev",
+  "type": "module",
+  "bin": {
+    "bizi": "./bin/bizi.js"
+  },
+  "files": [
+    "bin/**/*",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "cargo run -p bizi-tui --",
+    "build": "cargo build -p bizi-tui --release",
+    "test": "cargo test -p bizi-tui",
+    "compile:darwin-arm64": "node scripts/build.mjs darwin-arm64",
+    "compile:darwin-x64": "node scripts/build.mjs darwin-x64",
+    "compile:win32-x64": "node scripts/build.mjs win32-x64",
+    "compile:win32-arm64": "node scripts/build.mjs win32-arm64",
+    "compile:all": "node scripts/build.mjs all"
+  },
+  "optionalDependencies": {
+    "@getbizi/bizi-rs-darwin-arm64": "workspace:*",
+    "@getbizi/bizi-rs-darwin-x64": "workspace:*",
+    "@getbizi/bizi-rs-win32-x64": "workspace:*",
+    "@getbizi/bizi-rs-win32-arm64": "workspace:*"
+  }
+}

@@ -1,0 +1,339 @@
+//! HTTP + WebSocket client for the bizi server. Mirrors `@getbizi/client`.
+
+use anyhow::{Context, Result, anyhow, bail};
+use futures_util::{SinkExt, StreamExt};
+use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite::Message;
+
+use crate::model::{Task, TaskRunLogLine, TaskRunTreeNode};
+
+pub const BIZI_API_PORT: u16 = 7436;
+pub const BIZI_API_HOST: &str = "localhost";
+
+#[derive(Clone)]
+pub struct BiziApi {
+    client: reqwest::Client,
+    host: String,
+    port: u16,
+}
+
+#[derive(Debug, Deserialize)]
+struct ListTasksBody {
+    tasks: Option<IndexMap<String, Task>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListTaskRunsBody {
+    task_runs: Option<Vec<TaskRunTreeNode>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GetTaskRunBody {
+    task_run: Option<TaskRunTreeNode>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GetTaskRunLogsBody {
+    logs: Option<Vec<TaskRunLogLine>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StartTaskBody {
+    run_id: Option<String>,
+}
+
+/// A message pushed over the `/api/tasks/{run_id}/logs` websocket.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum TaskRunLogsStreamMessage {
+    Snapshot {
+        #[serde(rename = "runId")]
+        run_id: String,
+        logs: Vec<TaskRunLogLine>,
+    },
+    Log {
+        log: TaskRunLogLine,
+    },
+    Error {
+        message: String,
+    },
+}
+
+impl BiziApi {
+    pub fn new() -> Self {
+        Self::with_target(BIZI_API_HOST.to_string(), BIZI_API_PORT)
+    }
+
+    pub fn with_target(host: String, port: u16) -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            host,
+            port,
+        }
+    }
+
+    fn url(&self, path: &str) -> String {
+        format!("http://{}:{}{}", self.host, self.port, path)
+    }
+
+    fn ws_url(&self, path: &str) -> String {
+        format!("ws://{}:{}{}", self.host, self.port, path)
+    }
+
+    pub async fn list_tasks(&self, cwd: &str) -> Result<IndexMap<String, Task>> {
+        let response = self
+            .client
+            .get(self.url("/api/tasks"))
+            .query(&[("cwd", cwd)])
+            .send()
+            .await
+            .context("failed to reach the bizi server")?;
+        let body: ListTasksBody = read_json(response).await?;
+        body.tasks.ok_or_else(|| anyhow!("failed to load tasks"))
+    }
+
+    pub async fn list_task_runs(&self, cwd: &str) -> Result<Vec<TaskRunTreeNode>> {
+        let response = self
+            .client
+            .get(self.url("/api/tasks/runs"))
+            .query(&[("cwd", cwd)])
+            .send()
+            .await
+            .context("failed to reach the bizi server")?;
+        let body: ListTaskRunsBody = read_json(response).await?;
+        body.task_runs
+            .ok_or_else(|| anyhow!("failed to load task runs"))
+    }
+
+    pub async fn get_task_run(&self, run_id: &str) -> Result<TaskRunTreeNode> {
+        let response = self
+            .client
+            .get(self.url(&format!("/api/tasks/{}", encode_path(run_id))))
+            .send()
+            .await
+            .context("failed to reach the bizi server")?;
+        let body: GetTaskRunBody = read_json(response).await?;
+        body.task_run
+            .ok_or_else(|| anyhow!("failed to load task run"))
+    }
+
+    pub async fn get_task_run_logs(
+        &self,
+        run_id: &str,
+        include_children: bool,
+    ) -> Result<Vec<TaskRunLogLine>> {
+        let response = self
+            .client
+            .get(self.url(&format!("/api/tasks/{}/logs", encode_path(run_id))))
+            .query(&[("includeChildren", include_children.to_string())])
+            .send()
+            .await
+            .context("failed to reach the bizi server")?;
+        let body: GetTaskRunLogsBody = read_json(response).await?;
+        body.logs
+            .ok_or_else(|| anyhow!("failed to load task run logs"))
+    }
+
+    pub async fn run_task(
+        &self,
+        task: &str,
+        cwd: &str,
+        include_tasks: Option<Vec<String>>,
+    ) -> Result<String> {
+        let response = self
+            .client
+            .post(self.url("/api/tasks/run"))
+            .json(&json!({ "task": task, "cwd": cwd, "includeTasks": include_tasks }))
+            .send()
+            .await
+            .context("failed to reach the bizi server")?;
+        let body: StartTaskBody = read_json(response).await?;
+        body.run_id
+            .ok_or_else(|| anyhow!("failed to start task \"{task}\""))
+    }
+
+    pub async fn cancel_task(&self, run_id: &str) -> Result<()> {
+        let response = self
+            .client
+            .post(self.url("/api/tasks/cancel"))
+            .json(&json!({ "runId": run_id }))
+            .send()
+            .await
+            .context("failed to reach the bizi server")?;
+        ensure_ok(response).await
+    }
+
+    pub async fn restart_task(&self, run_id: &str) -> Result<()> {
+        let response = self
+            .client
+            .post(self.url("/api/tasks/restart"))
+            .json(&json!({ "runId": run_id }))
+            .send()
+            .await
+            .context("failed to reach the bizi server")?;
+        ensure_ok(response).await
+    }
+
+    /// Streams task run updates until the socket closes or the receiver goes
+    /// away. Callers own the lifetime by spawning (and aborting) this future.
+    pub async fn stream_task_run<T, F>(&self, run_id: &str, sender: mpsc::Sender<T>, wrap: F)
+    where
+        T: Send + 'static,
+        F: Fn(TaskRunTreeNode) -> T + Send + 'static,
+    {
+        let url = self.ws_url(&format!("/api/tasks/{}", encode_path(run_id)));
+        stream_json(url, sender, move |text| {
+            match serde_json::from_str::<GetTaskRunBody>(&text) {
+                Ok(GetTaskRunBody {
+                    task_run: Some(task_run),
+                }) => Some(wrap(task_run)),
+                _ => None,
+            }
+        })
+        .await;
+    }
+
+    /// Streams log snapshots and appended lines for a run.
+    pub async fn stream_task_logs<T, F>(
+        &self,
+        run_id: &str,
+        include_children: bool,
+        sender: mpsc::Sender<T>,
+        wrap: F,
+    ) where
+        T: Send + 'static,
+        F: Fn(TaskRunLogsStreamMessage) -> T + Send + 'static,
+    {
+        let query = if include_children {
+            "?includeChildren=true"
+        } else {
+            ""
+        };
+        let url = self.ws_url(&format!("/api/tasks/{}/logs{query}", encode_path(run_id)));
+        stream_json(url, sender, move |text| {
+            serde_json::from_str::<TaskRunLogsStreamMessage>(&text)
+                .ok()
+                .map(&wrap)
+        })
+        .await;
+    }
+}
+
+impl Default for BiziApi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+async fn stream_json<T, F>(url: String, sender: mpsc::Sender<T>, decode: F)
+where
+    T: Send + 'static,
+    F: Fn(String) -> Option<T> + Send + 'static,
+{
+    let Ok((mut socket, _)) = tokio_tungstenite::connect_async(&url).await else {
+        return;
+    };
+
+    while let Some(message) = socket.next().await {
+        match message {
+            Ok(Message::Text(text)) => {
+                if let Some(decoded) = decode(text)
+                    && sender.send(decoded).await.is_err()
+                {
+                    break;
+                }
+            }
+            Ok(Message::Ping(payload)) => {
+                if socket.send(Message::Pong(payload)).await.is_err() {
+                    break;
+                }
+            }
+            Ok(Message::Close(_)) | Err(_) => break,
+            Ok(_) => {}
+        }
+    }
+
+    let _ = socket.close(None).await;
+}
+
+async fn read_json<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> Result<T> {
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .context("failed to read the server response")?;
+    if !status.is_success() {
+        bail!("{}", server_error_message(&text, status.as_u16()));
+    }
+    serde_json::from_str(&text).context("failed to decode the server response")
+}
+
+async fn ensure_ok(response: reqwest::Response) -> Result<()> {
+    let status = response.status();
+    if status.is_success() {
+        return Ok(());
+    }
+    let text = response.text().await.unwrap_or_default();
+    bail!("{}", server_error_message(&text, status.as_u16()));
+}
+
+fn server_error_message(body: &str, status: u16) -> String {
+    #[derive(Deserialize)]
+    struct ErrorBody {
+        message: Option<String>,
+    }
+
+    serde_json::from_str::<ErrorBody>(body)
+        .ok()
+        .and_then(|error| error.message)
+        .unwrap_or_else(|| format!("request failed with status {status}"))
+}
+
+/// Percent encodes the characters that can legally appear in a run id but would
+/// otherwise change the request path.
+fn encode_path(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encodes_path_segments() {
+        assert_eq!(encode_path("abc_123-x"), "abc_123-x");
+        assert_eq!(encode_path("a/b c"), "a%2Fb%20c");
+    }
+
+    #[test]
+    fn decodes_log_stream_messages() {
+        let snapshot: TaskRunLogsStreamMessage =
+            serde_json::from_str(r#"{"type":"snapshot","runId":"r1","logs":[]}"#).unwrap();
+        assert!(matches!(
+            snapshot,
+            TaskRunLogsStreamMessage::Snapshot { .. }
+        ));
+
+        let error: TaskRunLogsStreamMessage =
+            serde_json::from_str(r#"{"type":"error","message":"nope"}"#).unwrap();
+        match error {
+            TaskRunLogsStreamMessage::Error { message } => assert_eq!(message, "nope"),
+            _ => panic!("expected an error message"),
+        }
+    }
+}

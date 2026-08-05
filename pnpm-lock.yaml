@@ -80,6 +80,29 @@ importers:
         specifier: workspace:*
         version: link:packages/bizi-win32-x64
 
+  apps/tui-rs:
+    optionalDependencies:
+      '@getbizi/bizi-rs-darwin-arm64':
+        specifier: workspace:*
+        version: link:packages/bizi-rs-darwin-arm64
+      '@getbizi/bizi-rs-darwin-x64':
+        specifier: workspace:*
+        version: link:packages/bizi-rs-darwin-x64
+      '@getbizi/bizi-rs-win32-arm64':
+        specifier: workspace:*
+        version: link:packages/bizi-rs-win32-arm64
+      '@getbizi/bizi-rs-win32-x64':
+        specifier: workspace:*
+        version: link:packages/bizi-rs-win32-x64
+
+  apps/tui-rs/packages/bizi-rs-darwin-arm64: {}
+
+  apps/tui-rs/packages/bizi-rs-darwin-x64: {}
+
+  apps/tui-rs/packages/bizi-rs-win32-arm64: {}
+
+  apps/tui-rs/packages/bizi-rs-win32-x64: {}
+
   apps/tui/packages/bizi-darwin-arm64: {}
 
   apps/tui/packages/bizi-darwin-x64: {}
