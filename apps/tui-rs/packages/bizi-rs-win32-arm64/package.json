@@ -1,6 +1,6 @@
 {
   "name": "@getbizi/bizi-rs-win32-arm64",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Windows arm64 binary for the Rust bizi TUI.",
   "license": "MIT",
   "repository": "https://github.com/ieedan/bizi",

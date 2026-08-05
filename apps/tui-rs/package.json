@@ -1,6 +1,6 @@
 {
   "name": "bizi-rs",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Terminal UI for bizi, written in Rust",
   "license": "MIT",
   "repository": "https://github.com/ieedan/bizi",
