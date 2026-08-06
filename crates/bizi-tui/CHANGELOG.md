@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/ieedan/bizi/compare/tui-rs-crate-v0.2.1...tui-rs-crate-v0.3.0) (2026-08-06)
+
+
+### Features
+
+* **bizi-tui:** enable version flag ([97cbf03](https://github.com/ieedan/bizi/commit/97cbf03a255b2cbdb35bd17f048e80aeac41372a))
+
+
+### Bug Fixes
+
+* **bizi-tui:** match the TypeScript client's behavior in three places ([#51](https://github.com/ieedan/bizi/issues/51)) ([5411830](https://github.com/ieedan/bizi/commit/54118309d44d5329160fefa0f38852ddb9a1e253))
+
 ## [0.2.1](https://github.com/ieedan/bizi/compare/tui-rs-crate-v0.2.0...tui-rs-crate-v0.2.1) (2026-08-06)
 
 
