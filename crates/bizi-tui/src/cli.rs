@@ -14,7 +14,7 @@ pub struct CliOptions {
 #[command(
     name = "bizi",
     about = "Terminal UI for bizi",
-    disable_version_flag = true
+    version = env!("CARGO_PKG_VERSION")
 )]
 pub struct Cli {
     /// Set working directory for task discovery and runs
@@ -194,5 +194,17 @@ mod tests {
     #[test]
     fn rejects_unknown_options() {
         assert!(resolve_cli_mode(&argv(&["--nope"])).is_err());
+    }
+
+    #[test]
+    fn reports_the_crate_version() {
+        for flag in ["--version", "-V"] {
+            let Err(error) = resolve_cli_mode(&argv(&[flag])) else {
+                panic!("expected a version exit for {flag}");
+            };
+            assert_eq!(error.kind(), clap::error::ErrorKind::DisplayVersion);
+            assert_eq!(error.exit_code(), 0);
+            assert!(error.to_string().contains(env!("CARGO_PKG_VERSION")));
+        }
     }
 }
