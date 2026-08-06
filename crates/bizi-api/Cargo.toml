@@ -1,6 +1,6 @@
 [package]
 name = "bizi-api"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Shared wire types for the bizi server and its Rust clients"
 repository = "https://github.com/ieedan/bizi"
