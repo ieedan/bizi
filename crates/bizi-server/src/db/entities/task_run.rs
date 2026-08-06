@@ -2,22 +2,9 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize, ToSchema,
-)]
-#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
-pub enum TaskRunStatus {
-    #[sea_orm(string_value = "queued")]
-    Queued,
-    #[sea_orm(string_value = "running")]
-    Running,
-    #[sea_orm(string_value = "success")]
-    Success,
-    #[sea_orm(string_value = "cancelled")]
-    Cancelled,
-    #[sea_orm(string_value = "failed")]
-    Failed,
-}
+// The wire contract owns this enum; the `orm` feature gives it the SeaORM
+// derives so it doubles as the column type here.
+pub use bizi_api::TaskRunStatus;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize, ToSchema)]
 #[sea_orm(table_name = "task_runs")]

@@ -1,97 +1,12 @@
-use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+//! Types the TUI works with. Everything that crosses the wire comes from
+//! `bizi-api`, the crate the server defines its API with, so a change to the
+//! contract is a compile error here rather than a message that silently fails
+//! to decode. The rest of this file is view state that never leaves the client.
 
-/// Mirrors the server's `TaskRunStatus`. The server serializes these with the
-/// default serde variant names so the wire format is `"Queued"`, `"Running"`, …
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum TaskRunStatus {
-    Queued,
-    Running,
-    Success,
-    Cancelled,
-    Failed,
-}
-
-impl TaskRunStatus {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            TaskRunStatus::Queued => "Queued",
-            TaskRunStatus::Running => "Running",
-            TaskRunStatus::Success => "Success",
-            TaskRunStatus::Cancelled => "Cancelled",
-            TaskRunStatus::Failed => "Failed",
-        }
-    }
-
-    pub fn is_active(self) -> bool {
-        matches!(self, TaskRunStatus::Queued | TaskRunStatus::Running)
-    }
-
-    pub fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            TaskRunStatus::Success | TaskRunStatus::Failed | TaskRunStatus::Cancelled
-        )
-    }
-
-    pub fn exit_code(self) -> i32 {
-        if matches!(self, TaskRunStatus::Success) {
-            0
-        } else {
-            1
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Task {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub command: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub depends_on: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub optional: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tasks: Option<IndexMap<String, Task>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub depends_on_tasks: Option<IndexMap<String, Task>>,
-}
-
-pub type TaskMap = IndexMap<String, Task>;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskRunTreeNode {
-    pub id: String,
-    pub task: String,
-    #[serde(default)]
-    pub cwd: String,
-    #[serde(default)]
-    pub parent_run_id: Option<String>,
-    pub status: TaskRunStatus,
-    #[serde(default)]
-    pub updated_at: i64,
-    #[serde(default)]
-    pub waiting_on: Option<String>,
-    #[serde(default)]
-    pub children: Vec<TaskRunTreeNode>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskRunLogLine {
-    pub run_id: String,
-    pub task: String,
-    pub line: String,
-    pub is_stderr: bool,
-    pub timestamp: i64,
-    pub sequence: u64,
-}
+// `Task` is reached through `TaskMap` in non-test code, so the re-export only
+// looks unused outside of tests.
+#[allow(unused_imports)]
+pub use bizi_api::{Task, TaskMap, TaskRunLogLine, TaskRunStatus, TaskRunTreeNode};
 
 /// The status shown for a task row. Parent tasks aggregate their children and
 /// become `Indeterminate` when the children disagree.

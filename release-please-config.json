@@ -27,6 +27,11 @@
     }
   ],
   "packages": {
+    "crates/bizi-api": {
+      "release-type": "rust",
+      "component": "api",
+      "initial-version": "0.1.0"
+    },
     "crates/bizi-server": {
       "release-type": "rust",
       "component": "server"

@@ -1,0 +1,32 @@
+[package]
+name = "bizi-api"
+version = "0.1.0"
+edition = "2024"
+description = "Shared wire types for the bizi server and its Rust clients"
+repository = "https://github.com/ieedan/bizi"
+homepage = "https://getbizi.dev"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+indexmap = { version = "2", features = ["serde"] }
+# Only the server needs these. Clients depend on this crate with default
+# features off, so neither is compiled into the TUI.
+utoipa = { version = "4", features = ["indexmap"], optional = true }
+# Derive macros only. Anything more would drag database drivers into the
+# dependency graph of a crate that just describes the wire format.
+sea-orm = { version = "1", default-features = false, features = [
+    "macros",
+], optional = true }
+# utoipa's derive expands `schema(example = ...)` into a `serde_json` literal.
+serde_json = { version = "1", optional = true }
+
+[features]
+default = []
+## OpenAPI schema derives, for the server that publishes the spec.
+schema = ["dep:utoipa", "dep:serde_json"]
+## SeaORM derives so `TaskRunStatus` can also be a database column type.
+orm = ["dep:sea-orm"]
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }

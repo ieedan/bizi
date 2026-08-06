@@ -1,6 +1,17 @@
 use std::collections::{HashMap, HashSet};
 
-use indexmap::IndexMap;
+// Every type on this list is the wire contract shared with the Rust clients.
+// Adding a field here cannot drift from what a client reads, because there is
+// only one definition.
+pub use bizi_api::{
+    CancelTaskRequest, CancelTaskResponse, CancelTaskResponseBody, GetTaskRunLogsRequest,
+    GetTaskRunLogsResponse, GetTaskRunLogsResponseBody, GetTaskRunResponse, GetTaskRunResponseBody,
+    ListTaskRunsRequest, ListTaskRunsResponse, ListTaskRunsResponseBody, ListTasksRequest,
+    ListTasksResponse, ListTasksResponseBody, RestartTaskRequest, RestartTaskResponse,
+    RestartTaskResponseBody, StartTaskRequest, StartTaskResponse, StartTaskResponseBody,
+    TaskRunLogLine, TaskRunLogsStreamMessage, TaskRunTreeNode,
+};
+
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::OnceLock;
@@ -21,13 +32,12 @@ use sea_orm::{
     ActiveValue::{NotSet, Set},
     ColumnTrait, DatabaseConnection, DbErr, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
     sync::{Mutex, broadcast, oneshot},
 };
-use utoipa::ToSchema;
 
 use crate::{
     api::{AppState, RunningProcessEntry, error::ErrorResponse},
@@ -44,73 +54,6 @@ const TASK_RUN_ID_ALPHABET: [char; 63] = [
     'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
     'U', 'V', 'W', 'X', 'Y', 'Z',
 ];
-
-#[derive(Debug, Clone, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ListTasksRequest {
-    #[schema(example = "/Users/johndoe/documents/github/example-project")]
-    pub cwd: String,
-}
-
-#[derive(Debug, Clone, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ListTaskRunsRequest {
-    #[schema(example = "/Users/johndoe/documents/github/example-project")]
-    pub cwd: String,
-}
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ListTasksResponseBody {
-    /// The list of tasks that are defined in the task.config.json file
-    pub tasks: IndexMap<String, Task>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ListTaskRunsResponseBody {
-    /// Root task runs for the cwd, each containing nested child runs.
-    pub task_runs: Vec<TaskRunTreeNode>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum ListTasksResponse {
-    Success(ListTasksResponseBody),
-    Error(ErrorResponse),
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum ListTaskRunsResponse {
-    Success(ListTaskRunsResponseBody),
-    Error(ErrorResponse),
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskRunTreeNode {
-    pub id: String,
-    pub task: String,
-    pub cwd: String,
-    pub parent_run_id: Option<String>,
-    pub status: TaskRunStatus,
-    pub updated_at: i64,
-    pub waiting_on: Option<String>,
-    pub children: Vec<TaskRunTreeNode>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetTaskRunResponseBody {
-    pub task_run: TaskRunTreeNode,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum GetTaskRunResponse {
-    Success(GetTaskRunResponseBody),
-    Error(ErrorResponse),
-}
 
 #[utoipa::path(
     get,
@@ -317,117 +260,12 @@ pub async fn get_task_run_logs(
     }
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct StartTaskRequest {
-    pub task: String,
-    pub cwd: String,
-    pub include_tasks: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct StartTaskResponseBody {
-    pub run_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum StartTaskResponse {
-    Success(StartTaskResponseBody),
-    Error(ErrorResponse),
-}
-
-#[derive(Debug, Clone, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CancelTaskRequest {
-    pub run_id: String,
-}
-
-#[derive(Debug, Clone, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct RestartTaskRequest {
-    pub run_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CancelTaskResponseBody {
-    pub cancelled_run_ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum CancelTaskResponse {
-    Success(CancelTaskResponseBody),
-    Error(ErrorResponse),
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct RestartTaskResponseBody {
-    pub run_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum RestartTaskResponse {
-    Success(RestartTaskResponseBody),
-    Error(ErrorResponse),
-}
-
 #[derive(Debug, Clone)]
 pub struct TaskRunStatusChangedEvent {
     pub run_id: String,
     pub task: String,
     pub cwd: String,
     pub status: TaskRunStatus,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskRunLogLine {
-    pub run_id: String,
-    pub task: String,
-    pub line: String,
-    pub is_stderr: bool,
-    pub timestamp: i64,
-    pub sequence: u64,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GetTaskRunLogsResponseBody {
-    pub run_id: String,
-    pub logs: Vec<TaskRunLogLine>,
-}
-
-#[derive(Debug, Clone, Deserialize, ToSchema, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct GetTaskRunLogsRequest {
-    pub include_children: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-#[serde(untagged)]
-pub enum GetTaskRunLogsResponse {
-    Success(GetTaskRunLogsResponseBody),
-    Error(ErrorResponse),
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-enum TaskRunLogsStreamMessage {
-    Snapshot {
-        run_id: String,
-        logs: Vec<TaskRunLogLine>,
-    },
-    Log {
-        log: TaskRunLogLine,
-    },
-    Error {
-        message: String,
-    },
 }
 
 #[utoipa::path(

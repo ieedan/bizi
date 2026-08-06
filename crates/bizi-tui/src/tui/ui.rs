@@ -9,7 +9,7 @@ use ratatui::style::{Color, Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::logs::{
-    format_elapsed_duration, format_log_timestamp, format_task_tag_for_log, parse_ansi_log_segments,
+    format_elapsed_duration, format_log_timestamp, format_task_tag_for_log, wrap_log_line,
 };
 use crate::model::{DisplayTaskStatus, TaskRunStatus, TaskTreeNode};
 use crate::status::{parse_color, task_status_display};
@@ -24,7 +24,7 @@ const SELECTION_BG: Color = Color::Rgb(0x3a, 0x4a, 0x78);
 const SELECTION_FG: Color = Color::Rgb(0xff, 0xff, 0xff);
 const DIALOG_WIDTH: u16 = 84;
 const TASK_PANEL_WIDTH: u16 = 42;
-const LOG_TIMESTAMP_WIDTH: usize = 14;
+pub const LOG_TIMESTAMP_WIDTH: usize = 14;
 /// Row of the search box's bottom border. Rows 1..=3 hold the box itself.
 const SEARCH_BOX_BOTTOM_Y: u16 = 3;
 
@@ -414,7 +414,11 @@ fn draw_logs(buffer: &mut Buffer, layout: &FrameLayout, app: &mut App) {
     }
 
     let viewport = area.height as usize;
-    let max_scroll = app.logs.len().saturating_sub(viewport);
+    let tag_width = app.log_task_tag_width();
+    let content_width = app.log_content_width(area.width, tag_width);
+    app.sync_log_layout(content_width, tag_width);
+
+    let max_scroll = app.log_layout.total_rows().saturating_sub(viewport);
     let scroll = if app.log_follow {
         max_scroll
     } else {
@@ -422,13 +426,24 @@ fn draw_logs(buffer: &mut Buffer, layout: &FrameLayout, app: &mut App) {
     };
     app.log_scroll = scroll;
 
-    let tag_width = app.log_task_tag_width();
-
+    // Lay out only the lines that intersect the viewport. `locate` jumps
+    // straight to the first visible one, so a million buffered lines cost the
+    // same as a screenful.
+    let (mut line_index, mut skip_rows) = app.log_layout.locate(scroll);
     let mut rendered_rows: Vec<Vec<char>> = Vec::with_capacity(viewport);
-    for (row, line) in app.logs.iter().skip(scroll).take(viewport).enumerate() {
-        let runs = build_log_runs(app, line, tag_width);
-        draw_runs(buffer, area.x, area.y + row as u16, area.width, &runs);
-        rendered_rows.push(runs_to_columns(&runs, area.width));
+
+    while rendered_rows.len() < viewport && line_index < app.logs.len() {
+        let rows = build_log_rows(app, &app.logs[line_index], tag_width, content_width);
+        for runs in rows.into_iter().skip(skip_rows) {
+            if rendered_rows.len() >= viewport {
+                break;
+            }
+            let row = rendered_rows.len() as u16;
+            draw_runs(buffer, area.x, area.y + row, area.width, &runs);
+            rendered_rows.push(runs_to_columns(&runs, area.width));
+        }
+        skip_rows = 0;
+        line_index += 1;
     }
     app.rendered_log_rows = rendered_rows;
 
@@ -446,15 +461,15 @@ fn draw_logs(buffer: &mut Buffer, layout: &FrameLayout, app: &mut App) {
     }
 }
 
-fn build_log_runs(app: &App, line: &crate::model::TaskRunLogLine, tag_width: usize) -> Runs {
-    let mut runs: Runs = Vec::new();
-
+/// One entry per display row: the first carries the timestamp and task tag, and
+/// wrapped continuations are indented to line up under the message column.
+fn build_log_rows(
+    app: &App,
+    line: &crate::model::TaskRunLogLine,
+    tag_width: usize,
+    content_width: usize,
+) -> Vec<Runs> {
     let timestamp = format_log_timestamp(line.timestamp);
-    runs.push((
-        pad_to_width(&timestamp, LOG_TIMESTAMP_WIDTH),
-        Style::default().fg(GREY),
-    ));
-
     let tag_style = match app
         .log_color_for_task(&line.task)
         .as_deref()
@@ -463,13 +478,28 @@ fn build_log_runs(app: &App, line: &crate::model::TaskRunLogLine, tag_width: usi
         Some(color) => Style::default().fg(color),
         None => Style::default(),
     };
-    runs.push((format_task_tag_for_log(&line.task, tag_width), tag_style));
+    let gutter_width = LOG_TIMESTAMP_WIDTH + tag_width;
 
-    for segment in parse_ansi_log_segments(&line.line) {
-        runs.push((segment.text, log_segment_style(&segment.style)));
-    }
-
-    runs
+    wrap_log_line(&line.line, content_width)
+        .into_iter()
+        .enumerate()
+        .map(|(row, segments)| {
+            let mut runs: Runs = Vec::new();
+            if row == 0 {
+                runs.push((
+                    pad_to_width(&timestamp, LOG_TIMESTAMP_WIDTH),
+                    Style::default().fg(GREY),
+                ));
+                runs.push((format_task_tag_for_log(&line.task, tag_width), tag_style));
+            } else {
+                runs.push((" ".repeat(gutter_width), Style::default()));
+            }
+            for segment in segments {
+                runs.push((segment.text, log_segment_style(&segment.style)));
+            }
+            runs
+        })
+        .collect()
 }
 
 fn log_segment_style(style: &crate::logs::LogTextStyle) -> Style {
@@ -620,16 +650,7 @@ fn draw_footer(buffer: &mut Buffer, layout: &FrameLayout, app: &App) {
 // ----------------------------------------------------------- quit dialog
 
 fn draw_quit_confirmation(buffer: &mut Buffer, area: Rect, app: &App) {
-    // The overlay blacks out the whole screen before drawing the dialog.
-    for y in area.y..(area.y + area.height) {
-        for x in area.x..(area.x + area.width) {
-            if let Some(cell) = buffer.cell_mut(Position::new(x, y)) {
-                cell.set_symbol(" ")
-                    .set_fg(Color::Reset)
-                    .set_bg(Color::Rgb(0, 0, 0));
-            }
-        }
-    }
+    blank_area(buffer, area);
 
     let running_tasks = app.running_task_rows();
     let width = DIALOG_WIDTH.min(area.width.saturating_sub(2));
@@ -748,6 +769,23 @@ fn draw_quit_confirmation(buffer: &mut Buffer, area: Rect, app: &App) {
     }
 }
 
+/// Blacks out `area` so an overlay can be drawn on top of it.
+///
+/// Resets each cell rather than just recolouring it. Setting only the symbol and
+/// the colours leaves the cell's modifiers behind, so a blanked run of underlined
+/// log output — a dev server printing its URL, say — keeps drawing its underline
+/// and streaks a line across the overlay.
+fn blank_area(buffer: &mut Buffer, area: Rect) {
+    for y in area.y..(area.y + area.height) {
+        for x in area.x..(area.x + area.width) {
+            if let Some(cell) = buffer.cell_mut(Position::new(x, y)) {
+                cell.reset();
+                cell.set_bg(Color::Rgb(0, 0, 0));
+            }
+        }
+    }
+}
+
 fn draw_box(buffer: &mut Buffer, x: u16, y: u16, width: u16, height: u16, style: Style) {
     if width < 2 || height < 2 {
         return;
@@ -774,7 +812,7 @@ fn draw_str(buffer: &mut Buffer, x: u16, y: u16, text: &str, style: Style) {
             break;
         }
         if let Some(cell) = buffer.cell_mut(Position::new(cursor, y)) {
-            cell.set_symbol(&grapheme.to_string());
+            cell.set_symbol(&renderable(grapheme).to_string());
             cell.set_style(style);
         }
         cursor += grapheme_width(grapheme);
@@ -793,7 +831,7 @@ fn draw_runs(buffer: &mut Buffer, x: u16, y: u16, max_width: u16, runs: &[(Strin
                 break;
             }
             if let Some(cell) = buffer.cell_mut(Position::new(cursor, y)) {
-                cell.set_symbol(&character.to_string());
+                cell.set_symbol(&renderable(character).to_string());
                 cell.set_style(*style);
             }
             cursor += grapheme_width(character);
@@ -813,7 +851,7 @@ fn runs_to_columns(runs: &[(String, Style)], max_width: u16) -> Vec<char> {
             if columns.len() >= limit {
                 return columns;
             }
-            columns.push(character);
+            columns.push(renderable(character));
             for _ in 1..grapheme_width(character) {
                 if columns.len() >= limit {
                     return columns;
@@ -830,6 +868,17 @@ fn grapheme_width(character: char) -> u16 {
     unicode_width::UnicodeWidthChar::width(character)
         .unwrap_or(0)
         .max(1) as u16
+}
+
+/// Control characters have no column width of their own but move a real
+/// terminal's cursor when printed, which would put the screen out of step with
+/// what we think we drew. Nothing reaches a cell without passing through here.
+fn renderable(character: char) -> char {
+    if character.is_control() {
+        ' '
+    } else {
+        character
+    }
 }
 
 fn truncate_to_width(text: &str, max_width: usize) -> String {
@@ -889,6 +938,32 @@ mod tests {
     fn collapses_whitespace_like_the_typescript_ui() {
         assert_eq!(collapse_whitespace("  a \n b  "), "a b");
         assert_eq!(collapse_whitespace(""), "");
+    }
+
+    #[test]
+    fn blanking_clears_styling_the_overlay_would_otherwise_show_through() {
+        let area = Rect::new(0, 0, 4, 1);
+        let mut buffer = Buffer::empty(area);
+        // What a log line carrying an ANSI underline leaves behind.
+        let cell = buffer.cell_mut(Position::new(1, 0)).unwrap();
+        cell.set_symbol("x");
+        cell.set_style(
+            Style::default()
+                .fg(Color::Red)
+                .add_modifier(Modifier::UNDERLINED | Modifier::BOLD),
+        );
+
+        blank_area(&mut buffer, area);
+
+        let cell = buffer.cell(Position::new(1, 0)).unwrap();
+        assert_eq!(cell.symbol(), " ");
+        assert_eq!(cell.fg, Color::Reset);
+        assert_eq!(cell.bg, Color::Rgb(0, 0, 0));
+        assert!(
+            cell.modifier.is_empty(),
+            "modifiers survived blanking: {:?}",
+            cell.modifier
+        );
     }
 
     #[test]

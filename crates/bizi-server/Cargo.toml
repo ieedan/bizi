@@ -12,6 +12,7 @@ name = "bizi-server"
 path = "src/main.rs"
 
 [dependencies]
+bizi-api = { path = "../bizi-api", version = "0.1.0", features = ["schema", "orm"] }
 axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "process", "sync", "signal"] }
 utoipa = { version = "4", features = ["indexmap"] }

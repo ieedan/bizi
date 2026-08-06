@@ -9,7 +9,7 @@ use crate::prompt::{
     self, MultiSelectOption, PromptResult, cancel, intro, log_error, log_success, outro,
 };
 
-const KNOWN_NPM_HOOKS: [&str; 24] = [
+const KNOWN_NPM_HOOKS: [&str; 25] = [
     "prepare",
     "prepublish",
     "prepublishOnly",
@@ -34,6 +34,7 @@ const KNOWN_NPM_HOOKS: [&str; 24] = [
     "postrestart",
     "prestop",
     "stop",
+    "poststop",
 ];
 
 const SCHEMA_URL: &str = "https://getbizi.dev/schemas/task.config.json";
@@ -200,6 +201,41 @@ mod tests {
         assert!(
             rendered.contains("\"dependsOn\": [\n            \"hello-world:hello\"\n          ]")
         );
+    }
+
+    #[test]
+    fn skips_every_npm_lifecycle_hook_the_typescript_cli_skips() {
+        // Kept in sync with `KNOWN_NPM_HOOKS` in `commands/init.ts`.
+        for hook in [
+            "prepare",
+            "prepublish",
+            "prepublishOnly",
+            "prepack",
+            "postpack",
+            "publish",
+            "postpublish",
+            "preinstall",
+            "install",
+            "postinstall",
+            "preuninstall",
+            "uninstall",
+            "postuninstall",
+            "preversion",
+            "version",
+            "postversion",
+            "pretest",
+            "posttest",
+            "prestart",
+            "poststart",
+            "prerestart",
+            "postrestart",
+            "prestop",
+            "stop",
+            "poststop",
+        ] {
+            assert!(KNOWN_NPM_HOOKS.contains(&hook), "missing hook {hook}");
+        }
+        assert_eq!(KNOWN_NPM_HOOKS.len(), 25);
     }
 
     #[test]

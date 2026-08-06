@@ -1,14 +1,18 @@
 //! HTTP + WebSocket client for the bizi server. Mirrors `@getbizi/client`.
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use futures_util::{SinkExt, StreamExt};
-use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::model::{Task, TaskRunLogLine, TaskRunTreeNode};
+// Request and response shapes come from the crate the server defines its API
+// with, so this client cannot disagree with the server about the wire format.
+pub use bizi_api::TaskRunLogsStreamMessage;
+use bizi_api::{
+    CancelTaskRequest, GetTaskRunLogsResponse, GetTaskRunResponse, ListTaskRunsResponse,
+    ListTasksResponse, RestartTaskRequest, StartTaskRequest, StartTaskResponse, TaskMap,
+    TaskRunLogLine, TaskRunTreeNode,
+};
 
 pub const BIZI_API_PORT: u16 = 7436;
 pub const BIZI_API_HOST: &str = "localhost";
@@ -20,49 +24,15 @@ pub struct BiziApi {
     port: u16,
 }
 
-#[derive(Debug, Deserialize)]
-struct ListTasksBody {
-    tasks: Option<IndexMap<String, Task>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ListTaskRunsBody {
-    task_runs: Option<Vec<TaskRunTreeNode>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GetTaskRunBody {
-    task_run: Option<TaskRunTreeNode>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GetTaskRunLogsBody {
-    logs: Option<Vec<TaskRunLogLine>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct StartTaskBody {
-    run_id: Option<String>,
-}
-
-/// A message pushed over the `/api/tasks/{run_id}/logs` websocket.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum TaskRunLogsStreamMessage {
-    Snapshot {
-        #[serde(rename = "runId")]
-        run_id: String,
-        logs: Vec<TaskRunLogLine>,
-    },
-    Log {
-        log: TaskRunLogLine,
-    },
-    Error {
-        message: String,
-    },
+/// Unwraps one of the API's untagged `Success | Error` responses, surfacing the
+/// server's own message when it is the error arm.
+macro_rules! unwrap_response {
+    ($response:expr, $enum:ident) => {
+        match $response {
+            $enum::Success(body) => body,
+            $enum::Error(error) => bail!("{}", error.message),
+        }
+    };
 }
 
 impl BiziApi {
@@ -86,7 +56,7 @@ impl BiziApi {
         format!("ws://{}:{}{}", self.host, self.port, path)
     }
 
-    pub async fn list_tasks(&self, cwd: &str) -> Result<IndexMap<String, Task>> {
+    pub async fn list_tasks(&self, cwd: &str) -> Result<TaskMap> {
         let response = self
             .client
             .get(self.url("/api/tasks"))
@@ -94,8 +64,11 @@ impl BiziApi {
             .send()
             .await
             .context("failed to reach the bizi server")?;
-        let body: ListTasksBody = read_json(response).await?;
-        body.tasks.ok_or_else(|| anyhow!("failed to load tasks"))
+        let body = unwrap_response!(
+            read_json::<ListTasksResponse>(response).await?,
+            ListTasksResponse
+        );
+        Ok(body.tasks)
     }
 
     pub async fn list_task_runs(&self, cwd: &str) -> Result<Vec<TaskRunTreeNode>> {
@@ -106,9 +79,11 @@ impl BiziApi {
             .send()
             .await
             .context("failed to reach the bizi server")?;
-        let body: ListTaskRunsBody = read_json(response).await?;
-        body.task_runs
-            .ok_or_else(|| anyhow!("failed to load task runs"))
+        let body = unwrap_response!(
+            read_json::<ListTaskRunsResponse>(response).await?,
+            ListTaskRunsResponse
+        );
+        Ok(body.task_runs)
     }
 
     pub async fn get_task_run(&self, run_id: &str) -> Result<TaskRunTreeNode> {
@@ -118,9 +93,11 @@ impl BiziApi {
             .send()
             .await
             .context("failed to reach the bizi server")?;
-        let body: GetTaskRunBody = read_json(response).await?;
-        body.task_run
-            .ok_or_else(|| anyhow!("failed to load task run"))
+        let body = unwrap_response!(
+            read_json::<GetTaskRunResponse>(response).await?,
+            GetTaskRunResponse
+        );
+        Ok(body.task_run)
     }
 
     pub async fn get_task_run_logs(
@@ -135,9 +112,11 @@ impl BiziApi {
             .send()
             .await
             .context("failed to reach the bizi server")?;
-        let body: GetTaskRunLogsBody = read_json(response).await?;
-        body.logs
-            .ok_or_else(|| anyhow!("failed to load task run logs"))
+        let body = unwrap_response!(
+            read_json::<GetTaskRunLogsResponse>(response).await?,
+            GetTaskRunLogsResponse
+        );
+        Ok(body.logs)
     }
 
     pub async fn run_task(
@@ -149,20 +128,28 @@ impl BiziApi {
         let response = self
             .client
             .post(self.url("/api/tasks/run"))
-            .json(&json!({ "task": task, "cwd": cwd, "includeTasks": include_tasks }))
+            .json(&StartTaskRequest {
+                task: task.to_string(),
+                cwd: cwd.to_string(),
+                include_tasks,
+            })
             .send()
             .await
             .context("failed to reach the bizi server")?;
-        let body: StartTaskBody = read_json(response).await?;
-        body.run_id
-            .ok_or_else(|| anyhow!("failed to start task \"{task}\""))
+        let body = unwrap_response!(
+            read_json::<StartTaskResponse>(response).await?,
+            StartTaskResponse
+        );
+        Ok(body.run_id)
     }
 
     pub async fn cancel_task(&self, run_id: &str) -> Result<()> {
         let response = self
             .client
             .post(self.url("/api/tasks/cancel"))
-            .json(&json!({ "runId": run_id }))
+            .json(&CancelTaskRequest {
+                run_id: run_id.to_string(),
+            })
             .send()
             .await
             .context("failed to reach the bizi server")?;
@@ -173,7 +160,9 @@ impl BiziApi {
         let response = self
             .client
             .post(self.url("/api/tasks/restart"))
-            .json(&json!({ "runId": run_id }))
+            .json(&RestartTaskRequest {
+                run_id: run_id.to_string(),
+            })
             .send()
             .await
             .context("failed to reach the bizi server")?;
@@ -189,10 +178,8 @@ impl BiziApi {
     {
         let url = self.ws_url(&format!("/api/tasks/{}", encode_path(run_id)));
         stream_json(url, sender, move |text| {
-            match serde_json::from_str::<GetTaskRunBody>(&text) {
-                Ok(GetTaskRunBody {
-                    task_run: Some(task_run),
-                }) => Some(wrap(task_run)),
+            match serde_json::from_str::<GetTaskRunResponse>(&text) {
+                Ok(GetTaskRunResponse::Success(body)) => Some(wrap(body.task_run)),
                 _ => None,
             }
         })
@@ -284,15 +271,9 @@ async fn ensure_ok(response: reqwest::Response) -> Result<()> {
 }
 
 fn server_error_message(body: &str, status: u16) -> String {
-    #[derive(Deserialize)]
-    struct ErrorBody {
-        message: Option<String>,
-    }
-
-    serde_json::from_str::<ErrorBody>(body)
-        .ok()
-        .and_then(|error| error.message)
-        .unwrap_or_else(|| format!("request failed with status {status}"))
+    serde_json::from_str::<bizi_api::ErrorResponse>(body)
+        .map(|error| error.message)
+        .unwrap_or_else(|_| format!("request failed with status {status}"))
 }
 
 /// Percent encodes the characters that can legally appear in a run id but would
@@ -328,6 +309,18 @@ mod tests {
             snapshot,
             TaskRunLogsStreamMessage::Snapshot { .. }
         ));
+
+        // Servers older than the camelCase fix send `run_id`; dropping those
+        // snapshots left the log pane stuck on the previously selected task.
+        let legacy_snapshot: TaskRunLogsStreamMessage =
+            serde_json::from_str(r#"{"type":"snapshot","run_id":"r1","logs":[]}"#).unwrap();
+        match legacy_snapshot {
+            TaskRunLogsStreamMessage::Snapshot { run_id, logs } => {
+                assert_eq!(run_id, "r1");
+                assert!(logs.is_empty());
+            }
+            _ => panic!("expected a snapshot"),
+        }
 
         let error: TaskRunLogsStreamMessage =
             serde_json::from_str(r#"{"type":"error","message":"nope"}"#).unwrap();
