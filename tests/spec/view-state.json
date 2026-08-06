@@ -1,0 +1,523 @@
+{
+  "$comment": "Everything the TUI derives from tasks + runs before drawing a frame.",
+  "resolveRowAction": [
+    {
+      "name": "a task that has never run is a run",
+      "tasks": "monorepo",
+      "runs": "none",
+      "taskKey": "dev",
+      "depth": 0,
+      "expected": "run"
+    },
+    {
+      "name": "a live task is a restart",
+      "tasks": "monorepo",
+      "runs": "devRunning",
+      "taskKey": "dev",
+      "depth": 0,
+      "expected": "restart"
+    },
+    {
+      "name": "a finished task is a run again",
+      "tasks": "monorepo",
+      "runs": "devSucceeded",
+      "taskKey": "dev",
+      "depth": 0,
+      "expected": "run"
+    },
+    {
+      "name": "a failed task is a run again",
+      "tasks": "monorepo",
+      "runs": "buildFailed",
+      "taskKey": "build",
+      "depth": 0,
+      "expected": "run"
+    },
+    {
+      "name": "children that disagree keep the parent on restart",
+      "tasks": "monorepo",
+      "runs": "devMixed",
+      "taskKey": "dev",
+      "depth": 0,
+      "expected": "restart"
+    },
+    {
+      "name": "a subtask is always a restart, even when it has run",
+      "tasks": "monorepo",
+      "runs": "devSucceeded",
+      "taskKey": "dev:api",
+      "depth": 1,
+      "expected": "restart"
+    },
+    {
+      "name": "a subtask with no run at all is still a restart",
+      "tasks": "monorepo",
+      "runs": "none",
+      "taskKey": "dev:api",
+      "depth": 1,
+      "expected": "restart"
+    }
+  ],
+  "selectedFooterStatus": [
+    {
+      "name": "a grouping task reports its aggregated status",
+      "tasks": "monorepo",
+      "runs": "devRunning",
+      "taskKey": "dev",
+      "expected": "Running"
+    },
+    {
+      "name": "a grouping task with disagreeing children reports nothing",
+      "tasks": "monorepo",
+      "runs": "devMixed",
+      "taskKey": "dev",
+      "expected": null
+    },
+    {
+      "name": "a grouping task with no runs reports nothing",
+      "tasks": "monorepo",
+      "runs": "none",
+      "taskKey": "dev",
+      "expected": null
+    },
+    {
+      "name": "a task with both children and a command reports its own run",
+      "tasks": "monorepo",
+      "runs": "devRunning",
+      "taskKey": "check",
+      "expected": null
+    },
+    {
+      "name": "a leaf reports its own run",
+      "tasks": "monorepo",
+      "runs": "devMixed",
+      "taskKey": "dev:web",
+      "expected": "Failed"
+    },
+    {
+      "name": "nothing selected",
+      "tasks": "monorepo",
+      "runs": "devRunning",
+      "taskKey": null,
+      "expected": null
+    }
+  ],
+  "canToggleLogMode": [
+    {
+      "tasks": "monorepo",
+      "taskKey": "dev",
+      "expected": false
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": "check",
+      "expected": true
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": "build",
+      "expected": false
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": "dev:api",
+      "expected": false
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": null,
+      "expected": false
+    }
+  ],
+  "usesAggregateLogs": [
+    {
+      "name": "a grouping task has no per-task view to switch to",
+      "tasks": "monorepo",
+      "taskKey": "dev",
+      "logMode": "selected",
+      "expected": true
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": "dev",
+      "logMode": "aggregate",
+      "expected": true
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": "check",
+      "logMode": "aggregate",
+      "expected": true
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": "check",
+      "logMode": "selected",
+      "expected": false
+    },
+    {
+      "name": "a leaf never aggregates",
+      "tasks": "monorepo",
+      "taskKey": "build",
+      "logMode": "aggregate",
+      "expected": false
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": null,
+      "logMode": "aggregate",
+      "expected": false
+    }
+  ],
+  "canCancelSelected": [
+    {
+      "tasks": "monorepo",
+      "runs": "devRunning",
+      "taskKey": "dev",
+      "expected": true
+    },
+    {
+      "name": "a finished parent stays cancellable because children may be live",
+      "tasks": "monorepo",
+      "runs": "devSucceeded",
+      "taskKey": "dev",
+      "expected": true
+    },
+    {
+      "tasks": "monorepo",
+      "runs": "devSucceeded",
+      "taskKey": "dev:api",
+      "expected": false
+    },
+    {
+      "tasks": "monorepo",
+      "runs": "none",
+      "taskKey": "dev",
+      "expected": false
+    },
+    {
+      "tasks": "monorepo",
+      "runs": "devRunning",
+      "taskKey": null,
+      "expected": false
+    }
+  ],
+  "runningTaskRows": [
+    {
+      "tasks": "monorepo",
+      "runs": "devRunning",
+      "expected": [
+        {
+          "key": "dev",
+          "depth": 0,
+          "status": "Running"
+        },
+        {
+          "key": "dev:api",
+          "depth": 1,
+          "status": "Running"
+        },
+        {
+          "key": "dev:web",
+          "depth": 1,
+          "status": "Running"
+        }
+      ]
+    },
+    {
+      "name": "finished children drop out",
+      "tasks": "monorepo",
+      "runs": "devMixed",
+      "expected": [
+        {
+          "key": "dev",
+          "depth": 0,
+          "status": "Running"
+        },
+        {
+          "key": "dev:api",
+          "depth": 1,
+          "status": "Running"
+        }
+      ]
+    },
+    {
+      "name": "queued counts as running for the exit prompt",
+      "tasks": "monorepo",
+      "runs": "devQueuedWaiting",
+      "expected": [
+        {
+          "key": "dev",
+          "depth": 0,
+          "status": "Queued"
+        }
+      ]
+    },
+    {
+      "tasks": "monorepo",
+      "runs": "devSucceeded",
+      "expected": []
+    },
+    {
+      "tasks": "monorepo",
+      "runs": "none",
+      "expected": []
+    }
+  ],
+  "logTaskTagWidth": [
+    {
+      "taskNames": [],
+      "expected": 10
+    },
+    {
+      "taskNames": [
+        "api"
+      ],
+      "expected": 10
+    },
+    {
+      "taskNames": [
+        "dev:api"
+      ],
+      "expected": 10
+    },
+    {
+      "taskNames": [
+        "dev:api",
+        "dev:api:watch"
+      ],
+      "expected": 16
+    },
+    {
+      "name": "clamped so the gutter cannot eat the pane",
+      "taskNames": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "expected": 40
+    }
+  ],
+  "buildLogColorByTaskKey": [
+    {
+      "name": "only colors the parser understands make it through",
+      "tasks": "monorepo",
+      "expected": {
+        "dev:api": "cyan",
+        "dev:web": "#f0a"
+      }
+    },
+    {
+      "tasks": "flat",
+      "expected": {}
+    }
+  ],
+  "clampSelectedIndex": [
+    {
+      "rowCount": 0,
+      "selectedIndex": 0,
+      "expected": 0
+    },
+    {
+      "rowCount": 0,
+      "selectedIndex": 5,
+      "expected": 0
+    },
+    {
+      "rowCount": 3,
+      "selectedIndex": 5,
+      "expected": 2
+    },
+    {
+      "rowCount": 3,
+      "selectedIndex": 2,
+      "expected": 2
+    },
+    {
+      "rowCount": 3,
+      "selectedIndex": 0,
+      "expected": 0
+    }
+  ],
+  "footerActions": [
+    {
+      "name": "nothing selected",
+      "input": {
+        "hasSelection": false,
+        "runAction": "run",
+        "canCancel": false,
+        "canToggleLogMode": false,
+        "logMode": "aggregate"
+      },
+      "expected": [
+        "/ find/run",
+        "ctrl+c copy",
+        "q quit"
+      ]
+    },
+    {
+      "name": "a runnable selection",
+      "input": {
+        "hasSelection": true,
+        "runAction": "run",
+        "canCancel": false,
+        "canToggleLogMode": false,
+        "logMode": "aggregate"
+      },
+      "expected": [
+        "/ find/run",
+        "r run",
+        "ctrl+c copy",
+        "q quit"
+      ]
+    },
+    {
+      "name": "everything available",
+      "input": {
+        "hasSelection": true,
+        "runAction": "restart",
+        "canCancel": true,
+        "canToggleLogMode": true,
+        "logMode": "selected"
+      },
+      "expected": [
+        "/ find/run",
+        "r restart",
+        "c cancel",
+        "m logs: selected",
+        "ctrl+c copy",
+        "q quit"
+      ]
+    }
+  ],
+  "runStatusText": [
+    {
+      "name": "a running task counts up from its first log line",
+      "input": {
+        "footerStatus": "Running",
+        "displayStatusLabel": "Running",
+        "waitingOn": null,
+        "selectedRunUpdatedAt": 1000,
+        "firstLogTimestamp": 2000,
+        "lastLogTimestamp": 3000,
+        "nowMs": 7500
+      },
+      "expected": "Running for 5s"
+    },
+    {
+      "name": "a finished task freezes at its last log line",
+      "input": {
+        "footerStatus": "Success",
+        "displayStatusLabel": "Success",
+        "waitingOn": null,
+        "selectedRunUpdatedAt": 1000,
+        "firstLogTimestamp": 2000,
+        "lastLogTimestamp": 3500,
+        "nowMs": 999999
+      },
+      "expected": "Succeeded in 1s"
+    },
+    {
+      "name": "a failed task",
+      "input": {
+        "footerStatus": "Failed",
+        "displayStatusLabel": "Failed",
+        "waitingOn": null,
+        "selectedRunUpdatedAt": 1000,
+        "firstLogTimestamp": null,
+        "lastLogTimestamp": null,
+        "nowMs": 4000
+      },
+      "expected": "Failed after 0ms"
+    },
+    {
+      "name": "a cancelled task",
+      "input": {
+        "footerStatus": "Cancelled",
+        "displayStatusLabel": "Cancelled",
+        "waitingOn": null,
+        "selectedRunUpdatedAt": 1000,
+        "firstLogTimestamp": 1000,
+        "lastLogTimestamp": 61000,
+        "nowMs": 90000
+      },
+      "expected": "Canceled after 1m 0s"
+    },
+    {
+      "name": "a queued task counts against now",
+      "input": {
+        "footerStatus": "Queued",
+        "displayStatusLabel": "Queued",
+        "waitingOn": null,
+        "selectedRunUpdatedAt": 1000,
+        "firstLogTimestamp": null,
+        "lastLogTimestamp": null,
+        "nowMs": 3000
+      },
+      "expected": "Queued for 2s"
+    },
+    {
+      "name": "waiting takes precedence over the run status and counts from updatedAt",
+      "input": {
+        "footerStatus": "Queued",
+        "displayStatusLabel": "Queued",
+        "waitingOn": "dev:api",
+        "selectedRunUpdatedAt": 1000,
+        "firstLogTimestamp": null,
+        "lastLogTimestamp": null,
+        "nowMs": 4000
+      },
+      "expected": "Waiting on dev:api for 3s"
+    },
+    {
+      "name": "whitespace in waitingOn is collapsed",
+      "input": {
+        "footerStatus": "Queued",
+        "displayStatusLabel": "Queued",
+        "waitingOn": "  dev:api\n  dev:web  ",
+        "selectedRunUpdatedAt": 1000,
+        "firstLogTimestamp": null,
+        "lastLogTimestamp": null,
+        "nowMs": 1500
+      },
+      "expected": "Waiting on dev:api dev:web for 500ms"
+    },
+    {
+      "name": "a blank waitingOn is ignored",
+      "input": {
+        "footerStatus": "Running",
+        "displayStatusLabel": "Running",
+        "waitingOn": "   ",
+        "selectedRunUpdatedAt": 1000,
+        "firstLogTimestamp": 1000,
+        "lastLogTimestamp": null,
+        "nowMs": 2000
+      },
+      "expected": "Running for 1s"
+    },
+    {
+      "name": "with no run status the display status is shown as-is",
+      "input": {
+        "footerStatus": null,
+        "displayStatusLabel": "Indeterminate",
+        "waitingOn": null,
+        "selectedRunUpdatedAt": null,
+        "firstLogTimestamp": null,
+        "lastLogTimestamp": null,
+        "nowMs": 1000
+      },
+      "expected": "Indeterminate"
+    },
+    {
+      "name": "with nothing at all it is idle",
+      "input": {
+        "footerStatus": null,
+        "displayStatusLabel": null,
+        "waitingOn": null,
+        "selectedRunUpdatedAt": null,
+        "firstLogTimestamp": null,
+        "lastLogTimestamp": null,
+        "nowMs": 1000
+      },
+      "expected": "Idle"
+    }
+  ]
+}

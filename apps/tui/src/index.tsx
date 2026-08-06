@@ -1,658 +1,168 @@
-import type {
-	Task,
-	TaskRunLogLine,
-	TaskRunLogsStreamMessage,
-	TaskRunTreeNode,
-} from "@getbizi/client";
+import type { TaskRunLogsStreamMessage } from "@getbizi/client";
 import { render, useKeyboard, useRenderer } from "@opentui/solid";
-import { api } from "./lib/bizi-api";
-import {
-	createEffect,
-	createMemo,
-	createSignal,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
+import { createMemo, onCleanup, onMount, Show } from "solid-js";
+import { createStore, produce } from "solid-js/store";
 import { resolveCliMode } from "./commands/cli";
-import {
-	QuitConfirmationDialog,
-	type RunningTaskRow,
-} from "./components/quit-confirmation-dialog";
+import { QuitConfirmationDialog } from "./components/quit-confirmation-dialog";
 import { RunDetailsPanel } from "./components/run-details-panel";
 import { StatusFooter } from "./components/status-footer";
 import { TaskTreePanel } from "./components/task-tree-panel";
 import { AppContextProvider } from "./lib/app-context";
 import type { CliOptions } from "./lib/args";
-import {
-	isJumpParentsBackwardShortcut,
-	isJumpParentsForwardShortcut,
-} from "./lib/keyboard-shortcuts";
-import { resolveTaskLogColor } from "./lib/logs";
+import { api } from "./lib/bizi-api";
 import { getSelectedTextByRow } from "./lib/selection-copy";
 import {
-	buildDisplayStatusByTaskKey,
-	canCancelRun,
-	indexRunsByTaskKey,
-	upsertRunTreeNode,
-} from "./lib/task-runs";
+	applyKey,
+	applyLogError,
+	applyLogLine,
+	applyLogSnapshot,
+	applyRootRunUpdated,
+	applyRunsLoaded,
+	applyTasksLoaded,
+	createTuiState,
+	selectedRow,
+	selectedRun,
+	selectedTaskKey,
+	stateRunningTaskRows,
+	syncSubscriptions,
+	type TuiEffect,
+	type TuiState,
+} from "./lib/tui-state";
 import {
-	buildTaskTree,
-	findNextParentTaskIndex,
-	findPreviousParentTaskIndex,
-	flattenTaskRows,
-	getDirectChildTaskKeys,
-} from "./lib/task-structure";
-import type { LogMode } from "./types";
+	buildLogColorByTaskKey,
+	canCancelSelected,
+	canToggleLogMode,
+	logTaskTagWidth,
+	selectedFooterStatus,
+	selectedRunAction,
+} from "./lib/view-state";
 
 const argv = process.argv.slice(2);
 let cliOptions: CliOptions = { cwd: process.cwd() };
 let cwd = cliOptions.cwd;
 const isMacOs = process.platform === "darwin";
+const COPY_TOAST_MS = 2000;
+const REFRESH_RUNS_MS = 1200;
 
 function App() {
 	const renderer = useRenderer();
+	const [state, setState] = createStore<TuiState>(
+		createTuiState({ isMacOs })
+	);
 
-	const [tasks, setTasks] = createSignal<Record<string, Task>>({});
-	const [taskRuns, setTaskRuns] = createSignal<TaskRunTreeNode[]>([]);
-	const [selectedIndex, setSelectedIndex] = createSignal(0);
-	const [logs, setLogs] = createSignal<TaskRunLogLine[]>([]);
-	const [logMode, setLogMode] = createSignal<LogMode>("aggregate");
-	const [focusedPane, setFocusedPane] = createSignal<"tasks" | "logs">(
-		"tasks"
-	);
-	const [taskSearchQuery, setTaskSearchQuery] = createSignal("");
-	const [isTaskSearchFocused, setIsTaskSearchFocused] = createSignal(false);
-	const [suppressNextTaskSearchSlash, setSuppressNextTaskSearchSlash] =
-		createSignal(false);
-	const [showTaskSearchError, setShowTaskSearchError] = createSignal(false);
-	const [showQuitConfirmation, setShowQuitConfirmation] = createSignal(false);
-	const [isCancellingBeforeExit, setIsCancellingBeforeExit] =
-		createSignal(false);
-	const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
-	const [copyToastMessage, setCopyToastMessage] = createSignal<string | null>(
-		null
-	);
 	let copyToastTimeoutId: ReturnType<typeof setTimeout> | null = null;
-	const showCopyToast = (message: string) => {
-		setCopyToastMessage(message);
-		if (copyToastTimeoutId !== null) {
-			clearTimeout(copyToastTimeoutId);
-		}
-		copyToastTimeoutId = setTimeout(() => {
-			setCopyToastMessage(null);
-			copyToastTimeoutId = null;
-		}, 2000);
-	};
-	onCleanup(() => {
-		if (copyToastTimeoutId !== null) {
-			clearTimeout(copyToastTimeoutId);
-			copyToastTimeoutId = null;
-		}
-	});
 
-	const taskTree = createMemo(() => buildTaskTree(tasks()));
-	const taskRows = createMemo(() => flattenTaskRows(taskTree()));
-	const runByTaskKey = createMemo(() => indexRunsByTaskKey(taskRuns()));
-	const displayStatusByTaskKey = createMemo(() =>
-		buildDisplayStatusByTaskKey(tasks(), runByTaskKey())
-	);
-	const rootRunIdsKey = createMemo(() =>
-		taskRuns()
-			.map((run) => run.id)
-			.sort()
-			.join("|")
-	);
-	const selectedRow = createMemo(() => taskRows()[selectedIndex()] ?? null);
-	const selectedRun = createMemo(() => {
-		const row = selectedRow();
-		if (!row) {
-			return undefined;
-		}
-		return runByTaskKey().get(row.key);
-	});
-	const selectedRunId = createMemo(() => selectedRun()?.id ?? null);
-	const selectedRunRevisionKey = createMemo(() => {
-		const run = selectedRun();
-		if (!run) {
-			return null;
-		}
-		return `${run.id}:${run.updatedAt}:${run.status}`;
-	});
-	const selectedDisplayStatus = createMemo(() => {
-		const row = selectedRow();
-		if (!row) {
-			return undefined;
-		}
-		return displayStatusByTaskKey().get(row.key);
-	});
-	const selectedWaitingOn = createMemo(
-		() => selectedRun()?.waitingOn ?? null
-	);
-	const selectedIsSubtask = createMemo(() => (selectedRow()?.depth ?? 0) > 0);
-	const hasTaskSelection = createMemo(() => selectedRow() !== null);
-	const canNavigateTasks = createMemo(() => taskRows().length > 0);
-	const canJumpParentTasks = createMemo(() => taskTree().length > 1);
-	const selectedRunAction = createMemo<"run" | "restart">(() => {
-		if (selectedIsSubtask()) {
-			return "restart";
-		}
-
-		const run = selectedRun();
-		if (!run) {
-			return "run";
-		}
-
-		const displayStatus = selectedDisplayStatus();
-		if (displayStatus === "Success" || displayStatus === "Failed") {
-			return "run";
-		}
-
-		return "restart";
-	});
-
-	const selectedCommand = createMemo(() => {
-		const row = selectedRow();
-		if (!row) {
-			return null;
-		}
-		return tasks()[row.key]?.command ?? null;
-	});
-	const selectedHasChildren = createMemo(() => {
-		const row = selectedRow();
-		if (!row) {
-			return false;
-		}
-		return getDirectChildTaskKeys(tasks(), row.key).length > 0;
-	});
-	const selectedHasCommand = createMemo(() => selectedCommand() !== null);
-	const selectedFooterStatus = createMemo<
-		"Queued" | "Running" | "Success" | "Cancelled" | "Failed" | null
-	>(() => {
-		if (selectedHasChildren() && !selectedHasCommand()) {
-			const displayStatus = selectedDisplayStatus();
-			if (displayStatus === "Indeterminate" || !displayStatus) {
-				return null;
-			}
-			return displayStatus;
-		}
-		return selectedRun()?.status ?? null;
-	});
-	const canToggleLogMode = createMemo(
-		() => selectedHasChildren() && selectedHasCommand()
-	);
-	const selectedUsesAggregateLogs = createMemo(() => {
-		if (!selectedHasChildren()) {
-			return false;
-		}
-		if (!selectedHasCommand()) {
-			return true;
-		}
-		return logMode() === "aggregate";
-	});
-	const canCancelSelected = createMemo(() => {
-		const run = selectedRun();
-		if (!run) {
-			return false;
-		}
-		return canCancelRun(run);
-	});
-	const runningTaskRows = createMemo<RunningTaskRow[]>(() =>
-		taskRows().flatMap((row) => {
-			const status = runByTaskKey().get(row.key)?.status;
-			if (status !== "Running" && status !== "Queued") {
-				return [];
-			}
-			return [{ key: row.key, depth: row.depth, status }];
-		})
-	);
-	const hasRunningTasks = createMemo(() => runningTaskRows().length > 0);
-	const isLogViewFocused = createMemo(() => focusedPane() === "logs");
-	const logTaskTagWidth = createMemo(() => {
-		const longestTaskName = logs().reduce(
-			(max, line) => Math.max(max, line.task.length),
-			0
-		);
-		return Math.min(40, Math.max(10, longestTaskName + 3));
-	});
-	const logColorByTaskKey = createMemo<Record<string, string>>(() => {
-		const map: Record<string, string> = {};
-		for (const [taskKey, task] of Object.entries(tasks())) {
-			const resolvedColor = resolveTaskLogColor(task.color);
-			if (resolvedColor) {
-				map[taskKey] = resolvedColor;
-			}
-		}
-		return map;
-	});
-
-	createEffect(() => {
-		const rows = taskRows();
-		if (rows.length === 0) {
-			setSelectedIndex(0);
-			return;
-		}
-		if (selectedIndex() >= rows.length) {
-			setSelectedIndex(rows.length - 1);
-		}
-	});
-
-	async function refreshTasks() {
-		const { data, error } = await api.listTasks(cwd);
-		if (error || !data || !("tasks" in data)) {
-			setErrorMessage("failed to load tasks");
-			return;
-		}
-		setErrorMessage(null);
-		setTasks(data.tasks);
-	}
-
-	async function refreshRuns() {
-		const { data, error } = await api.listTaskRuns(cwd);
-		if (error || !data || !("taskRuns" in data)) {
-			setErrorMessage("failed to load task runs");
-			return;
-		}
-		setErrorMessage(null);
-		setTaskRuns(data.taskRuns);
-	}
-
-	async function runSelectedTask() {
-		const row = selectedRow();
-		if (!row) {
-			return;
-		}
-		await runTaskByKey(row.key);
-	}
-
-	async function restartSelectedRun() {
-		const run = selectedRun();
-		if (!run) {
-			return;
-		}
-		await restartRunById(run.id);
-	}
-
-	async function runTaskByKey(taskKey: string) {
-		await api.runTask(taskKey, cwd);
-		await refreshRuns();
-	}
-
-	async function restartRunById(runId: string) {
-		setLogs([]);
-		await api.restartTask(runId);
-		await refreshRuns();
-	}
-
-	async function cancelSelectedRun() {
-		const run = selectedRun();
-		if (!run) {
-			return;
-		}
-		if (!canCancelRun(run)) {
-			return;
-		}
-		await api.cancelTask(run.id);
-		await refreshRuns();
-	}
-
-	function handleQuitKey(key: { name: string; ctrl?: boolean }) {
-		return key.name === "q" || (key.ctrl && key.name === "c");
-	}
-
-	function copySelectionToClipboard(): boolean {
-		const selection = renderer.getSelection();
-		if (!selection?.isActive) {
-			return false;
-		}
-		const text = getSelectedTextByRow(selection);
-		if (text.length === 0) {
-			return false;
-		}
-		const copied = renderer.copyToClipboardOSC52(text);
-		const lineCount = text.split("\n").length;
-		const linesLabel = lineCount === 1 ? "1 line" : `${lineCount} lines`;
-		showCopyToast(
-			copied
-				? `Copied ${linesLabel} to clipboard`
-				: "Copy failed (terminal does not support OSC52)"
-		);
-		renderer.clearSelection();
-		return true;
-	}
-
-	function handleCopySelectionKey(key: {
-		name: string;
-		ctrl?: boolean;
-		meta?: boolean;
-		super?: boolean;
-	}) {
-		if (key.name !== "c") {
-			return false;
-		}
-		// `ctrl` covers Ctrl+C on every platform.
-		// `super`/`meta` covers Cmd+C in terminals that forward it (Kitty,
-		// Ghostty, WezTerm with kitty keyboard protocol). Apple Terminal and
-		// default iTerm2 swallow Cmd+C themselves before it ever reaches us.
-		if (!(key.ctrl || key.meta || key.super)) {
-			return false;
-		}
-		return copySelectionToClipboard();
-	}
-
-	async function cancelRunningTasksBeforeExit() {
-		if (isCancellingBeforeExit()) {
-			return;
-		}
-		setIsCancellingBeforeExit(true);
-		const taskKeys = runningTaskRows().map((row) => row.key);
-		await Promise.allSettled(
-			taskKeys.map((taskKey) => {
-				const run = runByTaskKey().get(taskKey);
-				if (!run) {
-					return Promise.resolve();
-				}
-				return api.cancelTask(run.id);
+	/**
+	 * Every state change goes through here: the mutation runs against the store
+	 * draft and any effects it asks for are performed afterwards, so the state
+	 * machine itself stays free of I/O.
+	 */
+	function dispatch(mutate: (draft: TuiState) => TuiEffect[] | void): void {
+		let effects: TuiEffect[] = [];
+		setState(
+			produce((draft) => {
+				effects = [
+					...(mutate(draft) ?? []),
+					// Streams follow state, so every change gets a chance to
+					// open or close one.
+					...syncSubscriptions(draft),
+				];
 			})
 		);
-		quit();
+		for (const effect of effects) {
+			runEffect(effect).catch(() => undefined);
+		}
 	}
 
-	function quit() {
-		renderer.destroy();
-		process.exit(0);
-	}
-
-	function requestQuit() {
-		if (hasRunningTasks()) {
-			setShowQuitConfirmation(true);
-			return;
-		}
-		quit();
-	}
-
-	function handleQuitConfirmationKeys() {
-		if (!showQuitConfirmation()) {
-			return false;
-		}
-		return true;
-	}
-
-	function focusTaskSearch() {
-		setFocusedPane("tasks");
-		setIsTaskSearchFocused(true);
-	}
-
-	function clearTaskSearch() {
-		setTaskSearchQuery("");
-		setShowTaskSearchError(false);
-		setIsTaskSearchFocused(false);
-	}
-
-	function handleTaskSearchShortcut(key: { name: string }) {
-		if (key.name !== "/" || isTaskSearchFocused()) {
-			return false;
-		}
-		setSuppressNextTaskSearchSlash(true);
-		focusTaskSearch();
-		return true;
-	}
-
-	function resolveRowAction(
-		taskKey: string,
-		depth: number
-	): "run" | "restart" {
-		if (depth > 0) {
-			return "restart";
-		}
-		const run = runByTaskKey().get(taskKey);
-		if (!run) {
-			return "run";
-		}
-		const displayStatus = displayStatusByTaskKey().get(taskKey);
-		if (displayStatus === "Success" || displayStatus === "Failed") {
-			return "run";
-		}
-		return "restart";
-	}
-
-	async function runExactTaskSearchMatch(rowIndex: number) {
-		const row = taskRows()[rowIndex];
-		if (!row) {
-			return;
-		}
-		setSelectedIndex(rowIndex);
-		const action = resolveRowAction(row.key, row.depth);
-		if (action === "run") {
-			await runTaskByKey(row.key);
-			clearTaskSearch();
-			return;
-		}
-		const run = runByTaskKey().get(row.key);
-		if (run) {
-			await restartRunById(run.id);
-			clearTaskSearch();
-			return;
-		}
-		setErrorMessage(
-			row.depth > 0
-				? "Cannot restart subtask without an existing parent-linked run."
-				: "Cannot restart task because no existing run was found."
-		);
-	}
-
-	function handleTaskSearchSubmit() {
-		const exactQuery = taskSearchQuery().trim();
-		if (!exactQuery) {
-			setShowTaskSearchError(false);
-			return;
-		}
-		const rowIndex = taskRows().findIndex((row) => row.key === exactQuery);
-		if (rowIndex < 0) {
-			setShowTaskSearchError(true);
-			return;
-		}
-		setShowTaskSearchError(false);
-		runExactTaskSearchMatch(rowIndex).catch(() => undefined);
-	}
-
-	function handleTaskSearchInputKeys(key: { name: string }) {
-		if (!isTaskSearchFocused()) {
-			return false;
-		}
-		if (key.name === "down" || key.name === "j") {
-			if (taskRows().length > 0) {
-				setSelectedIndex(0);
-				setIsTaskSearchFocused(false);
-				setFocusedPane("tasks");
-			}
-			return true;
-		}
-		if (key.name === "/") {
-			setSuppressNextTaskSearchSlash(true);
-			return true;
-		}
-		if (key.name === "escape") {
-			clearTaskSearch();
-			return true;
-		}
-		if (key.name === "enter" || key.name === "return") {
-			handleTaskSearchSubmit();
-			return true;
-		}
-		return false;
-	}
-
-	function handlePaneNavigation(key: { name: string }) {
-		if ((key.name === "right" || key.name === "l") && !isLogViewFocused()) {
-			setFocusedPane("logs");
-			return true;
-		}
-		if ((key.name === "left" || key.name === "h") && isLogViewFocused()) {
-			setFocusedPane("tasks");
-			return true;
-		}
-		return false;
-	}
-
-	function handleTaskNavigation(key: {
-		name: string;
-		ctrl?: boolean;
-		option?: boolean;
-	}) {
-		const rows = taskRows();
-		if (rows.length === 0) {
-			return false;
-		}
-		if (isLogViewFocused()) {
-			return ["up", "k", "down", "j"].includes(key.name);
-		}
-		if (isJumpParentsBackwardShortcut(key, isMacOs)) {
-			setSelectedIndex((idx) =>
-				findPreviousParentTaskIndex(taskRows(), idx)
-			);
-			return true;
-		}
-		if (key.name === "up" || key.name === "k") {
-			if (selectedIndex() === 0) {
-				focusTaskSearch();
-				return true;
-			}
-			setSelectedIndex((idx) => Math.max(0, idx - 1));
-			return true;
-		}
-		if (isJumpParentsForwardShortcut(key, isMacOs)) {
-			setSelectedIndex((idx) => findNextParentTaskIndex(taskRows(), idx));
-			return true;
-		}
-		if (key.name === "down" || key.name === "j") {
-			setSelectedIndex((idx) => Math.min(rows.length - 1, idx + 1));
-			return true;
-		}
-		return false;
-	}
-
-	function handleActionKeys(key: { name: string }) {
-		if (key.name === "m") {
-			if (canToggleLogMode()) {
-				setLogMode((mode) =>
-					mode === "aggregate" ? "selected" : "aggregate"
+	async function runEffect(effect: TuiEffect): Promise<void> {
+		switch (effect.type) {
+			case "runTask":
+				await api.runTask(effect.taskKey, cwd);
+				await refreshRuns();
+				return;
+			case "restartRun":
+				await api.restartTask(effect.runId);
+				await refreshRuns();
+				return;
+			case "cancelRun":
+				await api.cancelTask(effect.runId);
+				await refreshRuns();
+				return;
+			case "cancelRunsBeforeExit":
+				await Promise.allSettled(
+					effect.runIds.map((runId) => api.cancelTask(runId))
 				);
-			}
-			return true;
+				quit();
+				return;
+			case "copySelection":
+				copySelectionToClipboard();
+				return;
+			case "quit":
+				quit();
+				return;
+			case "openRootRunStreams":
+				openRootRunStreams(effect.runIds);
+				return;
+			case "closeRootRunStreams":
+				closeRootRunStreams();
+				return;
+			case "openSelectedRunStreams":
+				openSelectedRunStreams(effect.runId, effect.includeChildren);
+				return;
+			case "closeSelectedRunStreams":
+				closeSelectedRunStreams();
+				return;
+			default:
+				return;
 		}
-		if (key.name === "r") {
-			if (selectedRunAction() === "restart") {
-				restartSelectedRun().catch(() => undefined);
-			} else {
-				runSelectedTask().catch(() => undefined);
-			}
-			return true;
-		}
-		if (key.name === "c") {
-			cancelSelectedRun().catch(() => undefined);
-			return true;
-		}
-		return false;
 	}
 
-	useKeyboard((key) => {
-		if (key.eventType !== "press") {
-			return;
-		}
-		if (handleQuitConfirmationKeys()) {
-			return;
-		}
-		if (handleCopySelectionKey(key)) {
-			return;
-		}
-		if (handleQuitKey(key)) {
-			requestQuit();
-			return;
-		}
-		if (handleTaskSearchShortcut(key)) {
-			return;
-		}
-		if (isTaskSearchFocused()) {
-			handleTaskSearchInputKeys(key);
-			return;
-		}
-		if (handlePaneNavigation(key)) {
-			return;
-		}
-		if (taskRows().length === 0) {
-			return;
-		}
-		if (handleTaskNavigation(key)) {
-			return;
-		}
-		handleActionKeys(key);
-	});
+	// ------------------------------------------------------------- streams
 
-	onMount(() => {
-		refreshTasks().catch(() => undefined);
-		refreshRuns().catch(() => undefined);
-		const interval = setInterval(() => {
-			refreshRuns().catch(() => undefined);
-		}, 1200);
-		onCleanup(() => clearInterval(interval));
-	});
+	let rootRunSockets: WebSocket[] = [];
+	let selectedRunSockets: WebSocket[] = [];
 
-	createEffect(() => {
-		const runIdsKey = rootRunIdsKey();
-		if (!runIdsKey) {
-			return;
-		}
-		const runIds = runIdsKey.split("|").filter(Boolean);
-
-		const sockets = runIds.map((runId) =>
+	function openRootRunStreams(runIds: string[]): void {
+		rootRunSockets = runIds.map((runId) =>
 			api.subscribeTaskRun(runId, {
 				onMessage: (payload) => {
 					if (!("taskRun" in payload)) {
 						return;
 					}
-					setTaskRuns((current) =>
-						upsertRunTreeNode(current, payload.taskRun)
+					dispatch((draft) =>
+						applyRootRunUpdated(draft, payload.taskRun)
 					);
 				},
 			})
 		);
+	}
 
-		onCleanup(() => {
-			for (const socket of sockets) {
-				socket.close();
-			}
-		});
-	});
-
-	createEffect(() => {
-		const row = selectedRow();
-		const runId = selectedRunId();
-		selectedRunRevisionKey();
-		const includeChildren = selectedUsesAggregateLogs();
-		if (!(row && runId)) {
-			setLogs([]);
-			return;
+	function closeRootRunStreams(): void {
+		for (const socket of rootRunSockets) {
+			socket.close();
 		}
+		rootRunSockets = [];
+	}
 
-		let closed = false;
-
+	function openSelectedRunStreams(
+		runId: string,
+		includeChildren: boolean
+	): void {
 		const logsSocket = api.subscribeTaskLogs(
 			runId,
 			{
 				onMessage: (payload: TaskRunLogsStreamMessage) => {
-					if (closed) {
-						return;
-					}
 					if (payload.type === "snapshot") {
-						setLogs(payload.logs);
+						dispatch((draft) =>
+							applyLogSnapshot(draft, payload.logs)
+						);
 						return;
 					}
 					if (payload.type === "log") {
-						setLogs((prev) => [...prev, payload.log]);
+						dispatch((draft) => applyLogLine(draft, payload.log));
 						return;
 					}
-					setErrorMessage(payload.message);
+					dispatch((draft) => applyLogError(draft, payload.message));
 				},
 				onError: () => {
 					/* intentional no-op */
@@ -666,20 +176,127 @@ function App() {
 
 		const runSocket = api.subscribeTaskRun(runId, {
 			onMessage: () => {
-				if (!closed) {
-					refreshRuns().catch(() => undefined);
-				}
+				refreshRuns().catch(() => undefined);
 			},
 			onError: () => {
 				/* intentional no-op */
 			},
 		});
 
-		onCleanup(() => {
-			closed = true;
-			logsSocket.close();
-			runSocket.close();
+		selectedRunSockets = [logsSocket, runSocket];
+	}
+
+	function closeSelectedRunStreams(): void {
+		for (const socket of selectedRunSockets) {
+			socket.close();
+		}
+		selectedRunSockets = [];
+	}
+
+	const currentRow = createMemo(() => selectedRow(state));
+	const currentRun = createMemo(() => selectedRun(state));
+	const currentTaskKey = createMemo(() => selectedTaskKey(state));
+	const displayStatus = createMemo(() => {
+		const taskKey = currentTaskKey();
+		return taskKey === null
+			? undefined
+			: state.displayStatusByTaskKey.get(taskKey);
+	});
+	const footerStatus = createMemo(() =>
+		selectedFooterStatus(state, currentTaskKey())
+	);
+	const runAction = createMemo(() => selectedRunAction(state, currentRow()));
+	const logColorByTaskKey = createMemo(() =>
+		buildLogColorByTaskKey(state.tasks)
+	);
+	const tagWidth = createMemo(() => logTaskTagWidth(state.logs));
+
+	async function refreshTasks() {
+		const { data, error } = await api.listTasks(cwd);
+		const tasks = error || !data || !("tasks" in data) ? null : data.tasks;
+		dispatch((draft) => applyTasksLoaded(draft, tasks));
+	}
+
+	async function refreshRuns() {
+		const { data, error } = await api.listTaskRuns(cwd);
+		const taskRuns =
+			error || !data || !("taskRuns" in data) ? null : data.taskRuns;
+		dispatch((draft) => applyRunsLoaded(draft, taskRuns));
+	}
+
+	function quit() {
+		renderer.destroy();
+		process.exit(0);
+	}
+
+	function showCopyToast(message: string) {
+		dispatch((draft) => {
+			draft.copyToastMessage = message;
 		});
+		if (copyToastTimeoutId !== null) {
+			clearTimeout(copyToastTimeoutId);
+		}
+		copyToastTimeoutId = setTimeout(() => {
+			dispatch((draft) => {
+				draft.copyToastMessage = null;
+			});
+			copyToastTimeoutId = null;
+		}, COPY_TOAST_MS);
+	}
+
+	onCleanup(() => {
+		if (copyToastTimeoutId !== null) {
+			clearTimeout(copyToastTimeoutId);
+			copyToastTimeoutId = null;
+		}
+	});
+
+	function currentSelectionText(): string {
+		const selection = renderer.getSelection();
+		if (!selection?.isActive) {
+			return "";
+		}
+		return getSelectedTextByRow(selection);
+	}
+
+	function copySelectionToClipboard(): void {
+		const text = currentSelectionText();
+		if (text.length === 0) {
+			return;
+		}
+		const copied = renderer.copyToClipboardOSC52(text);
+		const lineCount = text.split("\n").length;
+		const linesLabel = lineCount === 1 ? "1 line" : `${lineCount} lines`;
+		showCopyToast(
+			copied
+				? `Copied ${linesLabel} to clipboard`
+				: "Copy failed (terminal does not support OSC52)"
+		);
+		renderer.clearSelection();
+	}
+
+	useKeyboard((key) => {
+		// Resolved before dispatch so the state machine can decide whether
+		// Ctrl+C copies a selection or quits without touching the renderer.
+		const hasSelection = currentSelectionText().length > 0;
+		dispatch((draft) => {
+			draft.hasSelection = hasSelection;
+			return applyKey(draft, key);
+		});
+	});
+
+	onMount(() => {
+		refreshTasks().catch(() => undefined);
+		refreshRuns().catch(() => undefined);
+		const interval = setInterval(() => {
+			refreshRuns().catch(() => undefined);
+		}, REFRESH_RUNS_MS);
+		onCleanup(() => clearInterval(interval));
+	});
+
+	onCleanup(() => {
+		closeRootRunStreams();
+		closeSelectedRunStreams();
 	});
 
 	return (
@@ -687,64 +304,42 @@ function App() {
 			<box flexDirection="column" height="100%" width="100%">
 				<box flexDirection="row" flexGrow={1}>
 					<TaskTreePanel
-						displayStatusByTaskKey={displayStatusByTaskKey()}
-						hasTaskSearchError={showTaskSearchError()}
-						isTaskSearchFocused={isTaskSearchFocused()}
-						onTaskSearchInput={(value) => {
-							let normalizedValue = value;
-							if (suppressNextTaskSearchSlash()) {
-								normalizedValue = normalizedValue.replace(
-									"/",
-									""
-								);
-								setSuppressNextTaskSearchSlash(false);
-							}
-							if (normalizedValue.startsWith("/")) {
-								normalizedValue = normalizedValue.slice(1);
-							}
-							setShowTaskSearchError(false);
-							setTaskSearchQuery(normalizedValue);
-						}}
-						selectedTaskKey={selectedRow()?.key ?? null}
-						taskSearchQuery={taskSearchQuery()}
-						taskTree={taskTree()}
+						displayStatusByTaskKey={state.displayStatusByTaskKey}
+						hasTaskSearchError={state.showTaskSearchError}
+						isTaskSearchFocused={state.isTaskSearchFocused}
+						selectedTaskKey={currentTaskKey()}
+						taskSearchQuery={state.taskSearchQuery}
+						taskTree={state.taskTree}
 					/>
 					<RunDetailsPanel
-						isFocused={isLogViewFocused()}
+						isFocused={state.focusedPane === "logs"}
 						logColorByTaskKey={logColorByTaskKey()}
-						logs={logs()}
-						logTaskTagWidth={logTaskTagWidth()}
-						selectedFooterStatus={selectedFooterStatus()}
-						selectedRunUpdatedAt={selectedRun()?.updatedAt ?? null}
-						selectedStatus={selectedDisplayStatus() ?? null}
-						selectedTaskKey={selectedRow()?.key ?? null}
-						waitingOn={selectedWaitingOn()}
+						logs={state.logs}
+						logTaskTagWidth={tagWidth()}
+						selectedFooterStatus={footerStatus()}
+						selectedRunUpdatedAt={currentRun()?.updatedAt ?? null}
+						selectedStatus={displayStatus() ?? null}
+						selectedTaskKey={currentTaskKey()}
+						waitingOn={currentRun()?.waitingOn ?? null}
 					/>
 				</box>
 				<StatusFooter
-					canCancel={canCancelSelected()}
-					canJumpParentTasks={canJumpParentTasks()}
-					canNavigateTasks={canNavigateTasks()}
-					canRunOrRestart={hasTaskSelection()}
-					canToggleLogMode={canToggleLogMode()}
-					copyToastMessage={copyToastMessage()}
-					errorMessage={errorMessage()}
-					logMode={logMode()}
-					runAction={selectedRunAction()}
+					canCancel={canCancelSelected(state, currentTaskKey())}
+					canRunOrRestart={currentRow() !== null}
+					canToggleLogMode={canToggleLogMode(
+						state.tasks,
+						currentTaskKey()
+					)}
+					copyToastMessage={state.copyToastMessage}
+					errorMessage={state.errorMessage}
+					logMode={state.logMode}
+					runAction={runAction()}
 				/>
-				<Show when={showQuitConfirmation()}>
+				<Show when={state.showQuitConfirmation}>
 					<QuitConfirmationDialog
-						isCancelling={isCancellingBeforeExit()}
-						onConfirm={(action) => {
-							if (action === "cancelAll") {
-								cancelRunningTasksBeforeExit().catch(() =>
-									quit()
-								);
-							} else {
-								quit();
-							}
-						}}
-						runningTasks={runningTaskRows()}
+						isCancelling={state.isCancellingBeforeExit}
+						runningTasks={stateRunningTaskRows(state)}
+						selectedActionIndex={state.quitActionIndex}
 					/>
 				</Show>
 			</box>

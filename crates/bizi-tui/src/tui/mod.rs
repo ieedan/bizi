@@ -1,5 +1,7 @@
 //! The interactive terminal UI. Port of the TypeScript TUI's `index.tsx`.
 
+#[cfg(test)]
+mod key_conformance;
 mod selection;
 mod ui;
 
@@ -49,7 +51,7 @@ const REFRESH_RUNS_MS: u64 = 1200;
 const CLOCK_TICK_MS: u64 = 250;
 const COPY_TOAST_MS: u64 = 2000;
 /// opentui's scrollbox scrolls a fifth of the viewport per arrow key and half
-/// of it per page key. The TypeScript TUI delegates its log scrolling to that
+/// of it per page key. The TypeScript client delegates scrolling to that
 /// scrollbox, so these are the amounts to match.
 const LOG_SCROLL_LINE_DIVISOR: usize = 5;
 const LOG_SCROLL_PAGE_DIVISOR: usize = 2;
@@ -94,6 +96,28 @@ const QUIT_ACTIONS: [(&str, QuitAction); 2] = [
 pub struct RunningTaskRow {
     pub key: String,
     pub status: TaskRunStatus,
+}
+
+/// Work a keypress asks for that has to leave the state machine. Handlers only
+/// ever push these; `perform_effects` is what actually talks to the server.
+/// The TypeScript client's `lib/tui-state.ts` returns the same set, which is
+/// what lets both clients run the shared conformance cases.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppEffect {
+    RunTask(String),
+    RestartRun(String),
+    CancelRun(String),
+    CancelRunsBeforeExit(Vec<String>),
+    /// Hand the selected text to the clipboard. Deferred like the rest so a
+    /// keypress never touches the clipboard from inside the state machine.
+    CopySelection(String),
+    OpenRootRunStreams(Vec<String>),
+    CloseRootRunStreams,
+    OpenSelectedRunStreams {
+        run_id: String,
+        include_children: bool,
+    },
+    CloseSelectedRunStreams,
 }
 
 /// Where each log line starts once long lines are wrapped to the log pane's
@@ -187,12 +211,15 @@ pub struct App {
     selection: Option<Selection>,
 
     // Websocket bookkeeping.
-    root_runs_key: String,
+    root_runs_key: Option<String>,
     root_run_handles: Vec<JoinHandle<()>>,
     log_subscription_key: Option<String>,
     log_generation: u64,
     log_handles: Vec<JoinHandle<()>>,
 
+    /// Pending work from the last keypress, drained by `perform_effects`.
+    effects: Vec<AppEffect>,
+    is_macos: bool,
     should_quit: bool,
 }
 
@@ -232,12 +259,45 @@ impl App {
             task_area: Rect::default(),
             rendered_log_rows: Vec::new(),
             selection: None,
-            root_runs_key: String::new(),
+            root_runs_key: None,
             root_run_handles: Vec::new(),
             log_subscription_key: None,
             log_generation: 0,
             log_handles: Vec::new(),
+            effects: Vec::new(),
+            is_macos: IS_MACOS,
             should_quit: false,
+        }
+    }
+
+    /// Runs the work the last keypress queued up. Split from the handlers so
+    /// key input stays synchronous and testable.
+    fn perform_effects(&mut self) {
+        for effect in std::mem::take(&mut self.effects) {
+            match effect {
+                AppEffect::RunTask(task_key) => self.spawn_run_task(task_key),
+                AppEffect::RestartRun(run_id) => self.spawn_restart_run(run_id),
+                AppEffect::CancelRun(run_id) => self.spawn_cancel_run(run_id),
+                AppEffect::CancelRunsBeforeExit(run_ids) => {
+                    self.spawn_cancel_runs_before_exit(run_ids)
+                }
+                AppEffect::CopySelection(text) => self.copy_text_to_clipboard(&text),
+                AppEffect::OpenRootRunStreams(run_ids) => self.spawn_root_run_streams(run_ids),
+                AppEffect::CloseRootRunStreams => {
+                    for handle in self.root_run_handles.drain(..) {
+                        handle.abort();
+                    }
+                }
+                AppEffect::OpenSelectedRunStreams {
+                    run_id,
+                    include_children,
+                } => self.spawn_selected_run_streams(run_id, include_children),
+                AppEffect::CloseSelectedRunStreams => {
+                    for handle in self.log_handles.drain(..) {
+                        handle.abort();
+                    }
+                }
+            }
         }
     }
 
@@ -250,6 +310,10 @@ impl App {
         self.display_status_by_task_key =
             build_display_status_by_task_key(&self.tasks, &self.run_by_task_key);
 
+        self.clamp_selected_index();
+    }
+
+    fn clamp_selected_index(&mut self) {
         if self.task_rows.is_empty() {
             self.selected_index = 0;
         } else if self.selected_index >= self.task_rows.len() {
@@ -445,30 +509,16 @@ impl App {
         });
     }
 
-    fn run_task_by_key(&self, task_key: String) {
-        let api = self.api.clone();
-        let cwd = self.cwd.clone();
-        let events = self.events.clone();
-        tokio::spawn(async move {
-            let _ = api.run_task(&task_key, &cwd, None).await;
-            let result = api.list_task_runs(&cwd).await.ok();
-            let _ = events.send(AppEvent::RunsLoaded(result)).await;
-        });
+    fn run_task_by_key(&mut self, task_key: String) {
+        self.effects.push(AppEffect::RunTask(task_key));
     }
 
     fn restart_run_by_id(&mut self, run_id: String) {
         self.replace_logs(Vec::new());
-        let api = self.api.clone();
-        let cwd = self.cwd.clone();
-        let events = self.events.clone();
-        tokio::spawn(async move {
-            let _ = api.restart_task(&run_id).await;
-            let result = api.list_task_runs(&cwd).await.ok();
-            let _ = events.send(AppEvent::RunsLoaded(result)).await;
-        });
+        self.effects.push(AppEffect::RestartRun(run_id));
     }
 
-    fn cancel_selected_run(&self) {
+    fn cancel_selected_run(&mut self) {
         let Some(run) = self.selected_run() else {
             return;
         };
@@ -476,14 +526,7 @@ impl App {
             return;
         }
         let run_id = run.id.clone();
-        let api = self.api.clone();
-        let cwd = self.cwd.clone();
-        let events = self.events.clone();
-        tokio::spawn(async move {
-            let _ = api.cancel_task(&run_id).await;
-            let result = api.list_task_runs(&cwd).await.ok();
-            let _ = events.send(AppEvent::RunsLoaded(result)).await;
-        });
+        self.effects.push(AppEffect::CancelRun(run_id));
     }
 
     fn cancel_running_tasks_before_exit(&mut self) {
@@ -498,6 +541,43 @@ impl App {
             .filter_map(|row| self.run_by_task_key.get(&row.key).map(|run| run.id.clone()))
             .collect();
 
+        self.effects.push(AppEffect::CancelRunsBeforeExit(run_ids));
+    }
+
+    fn spawn_run_task(&self, task_key: String) {
+        let api = self.api.clone();
+        let cwd = self.cwd.clone();
+        let events = self.events.clone();
+        tokio::spawn(async move {
+            let _ = api.run_task(&task_key, &cwd, None).await;
+            let result = api.list_task_runs(&cwd).await.ok();
+            let _ = events.send(AppEvent::RunsLoaded(result)).await;
+        });
+    }
+
+    fn spawn_restart_run(&self, run_id: String) {
+        let api = self.api.clone();
+        let cwd = self.cwd.clone();
+        let events = self.events.clone();
+        tokio::spawn(async move {
+            let _ = api.restart_task(&run_id).await;
+            let result = api.list_task_runs(&cwd).await.ok();
+            let _ = events.send(AppEvent::RunsLoaded(result)).await;
+        });
+    }
+
+    fn spawn_cancel_run(&self, run_id: String) {
+        let api = self.api.clone();
+        let cwd = self.cwd.clone();
+        let events = self.events.clone();
+        tokio::spawn(async move {
+            let _ = api.cancel_task(&run_id).await;
+            let result = api.list_task_runs(&cwd).await.ok();
+            let _ = events.send(AppEvent::RunsLoaded(result)).await;
+        });
+    }
+
+    fn spawn_cancel_runs_before_exit(&self, run_ids: Vec<String>) {
         let api = self.api.clone();
         let events = self.events.clone();
         tokio::spawn(async move {
@@ -520,40 +600,26 @@ impl App {
 
     // ----------------------------------------------------------- subscriptions
 
+    /// Brings the open websockets in line with the current state. Port of
+    /// `syncSubscriptions` in the TypeScript client's `lib/tui-state.ts`.
     fn sync_subscriptions(&mut self) {
         self.sync_root_run_subscriptions();
-        self.sync_log_subscription();
+        self.sync_selected_run_subscription();
     }
 
-    fn sync_root_run_subscriptions(&mut self) {
+    /// The run ids whose status stream the app follows — the roots of the run
+    /// tree, sorted so the set is compared by value rather than arrival order.
+    fn root_stream_run_ids(&self) -> Vec<String> {
         let mut run_ids: Vec<String> = self.task_runs.iter().map(|run| run.id.clone()).collect();
         run_ids.sort();
-        let key = run_ids.join("|");
-        if key == self.root_runs_key {
-            return;
-        }
-        self.root_runs_key = key;
-
-        for handle in self.root_run_handles.drain(..) {
-            handle.abort();
-        }
-
-        for run_id in run_ids {
-            let api = self.api.clone();
-            let events = self.events.clone();
-            self.root_run_handles.push(tokio::spawn(async move {
-                api.stream_task_run(&run_id, events, AppEvent::RootRunUpdated)
-                    .await;
-            }));
-        }
+        run_ids
     }
 
     /// Identity of the selected run's log stream. The run's `updated_at` and
     /// `status` are part of it, so a run that reports any change re-opens the
     /// stream and takes a fresh snapshot from the server rather than trusting
-    /// the lines it has already accumulated. The TypeScript TUI's effect tracks
-    /// the same revision, and the two need to agree about when a reconnect
-    /// happens.
+    /// the lines it has already accumulated. This matches the TypeScript
+    /// client, whose effect tracks the same revision key.
     fn selected_stream_key(&self) -> Option<String> {
         let run = self.selected_run()?;
         Some(format!(
@@ -565,16 +631,36 @@ impl App {
         ))
     }
 
-    fn sync_log_subscription(&mut self) {
+    fn sync_root_run_subscriptions(&mut self) {
+        let run_ids = self.root_stream_run_ids();
+        let next_key = if run_ids.is_empty() {
+            None
+        } else {
+            Some(run_ids.join("|"))
+        };
+        if next_key == self.root_runs_key {
+            return;
+        }
+
+        if self.root_runs_key.is_some() {
+            self.effects.push(AppEffect::CloseRootRunStreams);
+        }
+        self.root_runs_key = next_key;
+        if self.root_runs_key.is_some() {
+            self.effects.push(AppEffect::OpenRootRunStreams(run_ids));
+        }
+    }
+
+    fn sync_selected_run_subscription(&mut self) {
         let next_key = self.selected_stream_key();
         if next_key == self.log_subscription_key {
             return;
         }
-        self.log_subscription_key = next_key;
 
-        for handle in self.log_handles.drain(..) {
-            handle.abort();
+        if self.log_subscription_key.is_some() {
+            self.effects.push(AppEffect::CloseSelectedRunStreams);
         }
+        self.log_subscription_key = next_key;
 
         let Some(run) = self.selected_run() else {
             self.replace_logs(Vec::new());
@@ -582,14 +668,33 @@ impl App {
         };
         let run_id = run.id.clone();
         let include_children = self.selected_uses_aggregate_logs();
-        self.log_generation += 1;
-        let generation = self.log_generation;
 
-        // Matches the TypeScript TUI: the previous run's lines stay on screen
-        // until the new subscription's snapshot replaces them, and the view
-        // jumps back to the bottom for the new selection.
+        self.log_generation += 1;
+        // The previous run's lines stay on screen until the new
+        // subscription's snapshot replaces them, and the view jumps back to
+        // the bottom for the new selection.
         self.log_scroll = 0;
         self.log_follow = true;
+
+        self.effects.push(AppEffect::OpenSelectedRunStreams {
+            run_id,
+            include_children,
+        });
+    }
+
+    fn spawn_root_run_streams(&mut self, run_ids: Vec<String>) {
+        for run_id in run_ids {
+            let api = self.api.clone();
+            let events = self.events.clone();
+            self.root_run_handles.push(tokio::spawn(async move {
+                api.stream_task_run(&run_id, events, AppEvent::RootRunUpdated)
+                    .await;
+            }));
+        }
+    }
+
+    fn spawn_selected_run_streams(&mut self, run_id: String, include_children: bool) {
+        let generation = self.log_generation;
 
         let api = self.api.clone();
         let events = self.events.clone();
@@ -772,7 +877,13 @@ impl App {
             return false;
         }
 
-        let copied = selection::copy_to_clipboard(&text);
+        self.selection = None;
+        self.effects.push(AppEffect::CopySelection(text));
+        true
+    }
+
+    fn copy_text_to_clipboard(&mut self, text: &str) {
+        let copied = selection::copy_to_clipboard(text);
         let line_count = text.lines().count().max(1);
         let lines_label = if line_count == 1 {
             "1 line".to_string()
@@ -784,8 +895,6 @@ impl App {
         } else {
             "Copy failed (no clipboard available)".to_string()
         });
-        self.selection = None;
-        true
     }
 
     fn handle_task_search_shortcut(&mut self, key: KeyEvent) -> bool {
@@ -825,7 +934,7 @@ impl App {
                 self.task_search_query.pop();
                 self.show_task_search_error = false;
             }
-            KeyCode::Char(character) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char(character) if is_printable_key(key) => {
                 self.task_search_query.push(character);
                 self.show_task_search_error = false;
             }
@@ -916,7 +1025,7 @@ impl App {
             return self.handle_log_scroll_keys(key);
         }
 
-        if is_jump_parents_backward_shortcut(&key, IS_MACOS) {
+        if is_jump_parents_backward_shortcut(&key, self.is_macos) {
             self.selected_index =
                 find_previous_parent_task_index(&self.task_rows, self.selected_index);
             return true;
@@ -927,7 +1036,9 @@ impl App {
                 // In the TypeScript TUI the search `<input>` is a focused
                 // component, so the same keypress that refocuses it is also
                 // typed into it. Only a printable key lands; Up does not.
-                if let KeyCode::Char(character) = key.code {
+                if let KeyCode::Char(character) = key.code
+                    && is_printable_key(key)
+                {
                     self.task_search_query.push(character);
                     self.show_task_search_error = false;
                 }
@@ -936,7 +1047,7 @@ impl App {
             self.selected_index -= 1;
             return true;
         }
-        if is_jump_parents_forward_shortcut(&key, IS_MACOS) {
+        if is_jump_parents_forward_shortcut(&key, self.is_macos) {
             self.selected_index = find_next_parent_task_index(&self.task_rows, self.selected_index);
             return true;
         }
@@ -981,7 +1092,7 @@ impl App {
     }
 
     /// opentui's scrollbox moves by a fraction of the viewport, so the
-    /// TypeScript TUI scrolls further per keypress on a taller pane. This
+    /// TypeScript client scrolls further per keypress on a taller pane. This
     /// reproduces that rather than moving a fixed number of rows.
     fn log_scroll_step(&self, divisor: usize) -> isize {
         (self.log_viewport_height.max(1) / divisor).max(1) as isize
@@ -1066,6 +1177,14 @@ impl App {
     }
 }
 
+/// A key that types a character rather than acting as a control key. Chords
+/// with Ctrl/Cmd are control keys even when their code is a `Char`.
+fn is_printable_key(key: KeyEvent) -> bool {
+    !(key.modifiers.contains(KeyModifiers::CONTROL)
+        || key.modifiers.contains(KeyModifiers::SUPER)
+        || key.modifiers.contains(KeyModifiers::META))
+}
+
 fn is_quit_key(key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Char('q') => true,
@@ -1122,10 +1241,14 @@ async fn event_loop(
             }
         }
 
+        // Streams follow state, so every change gets a chance to open or close
+        // one before the effects are performed.
+        app.sync_subscriptions();
+        app.perform_effects();
+
         if app.should_quit {
             break;
         }
-        app.sync_subscriptions();
     }
 
     Ok(())

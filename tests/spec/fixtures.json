@@ -1,0 +1,228 @@
+{
+  "$comment": "Shared inputs for the conformance cases. Task maps are keyed in config order, which both clients must preserve.",
+  "taskMaps": {
+    "empty": {},
+    "flat": {
+      "build": { "command": "pnpm build" },
+      "test": { "command": "pnpm test" }
+    },
+    "monorepo": {
+      "dev": { "tasks": { "api": {}, "web": {} } },
+      "dev:api": { "command": "pnpm --filter api dev", "color": "cyan" },
+      "dev:web": { "command": "pnpm --filter web dev", "color": "#f0a" },
+      "check": {
+        "command": "pnpm check",
+        "tasks": { "lint": {}, "types": {} }
+      },
+      "check:lint": { "command": "pnpm lint", "color": "not-a-color" },
+      "check:types": { "command": "pnpm tsc" },
+      "build": { "command": "pnpm build" }
+    },
+    "deep": {
+      "a": { "tasks": { "b": {} } },
+      "a:b": { "tasks": { "c": {} } },
+      "a:b:c": { "command": "echo c" },
+      "z": { "command": "echo z" }
+    },
+    "ghostChild": {
+      "dev": { "tasks": { "missing": {} } }
+    },
+    "groupOnly": {
+      "dev": { "tasks": { "api": {} } },
+      "dev:api": { "command": "pnpm --filter api dev" }
+    }
+  },
+  "runTrees": {
+    "none": [],
+    "devRunning": [
+      {
+        "id": "run-dev",
+        "task": "dev",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 1000,
+        "children": [
+          {
+            "id": "run-dev-api",
+            "task": "dev:api",
+            "cwd": "/repo",
+            "parentRunId": "run-dev",
+            "status": "Running",
+            "updatedAt": 1200,
+            "children": []
+          },
+          {
+            "id": "run-dev-web",
+            "task": "dev:web",
+            "cwd": "/repo",
+            "parentRunId": "run-dev",
+            "status": "Running",
+            "updatedAt": 1100,
+            "children": []
+          }
+        ]
+      }
+    ],
+    "devMixed": [
+      {
+        "id": "run-dev",
+        "task": "dev",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 1000,
+        "children": [
+          {
+            "id": "run-dev-api",
+            "task": "dev:api",
+            "cwd": "/repo",
+            "parentRunId": "run-dev",
+            "status": "Running",
+            "updatedAt": 1200,
+            "children": []
+          },
+          {
+            "id": "run-dev-web",
+            "task": "dev:web",
+            "cwd": "/repo",
+            "parentRunId": "run-dev",
+            "status": "Failed",
+            "updatedAt": 1300,
+            "children": []
+          }
+        ]
+      }
+    ],
+    "devSucceeded": [
+      {
+        "id": "run-dev",
+        "task": "dev",
+        "cwd": "/repo",
+        "status": "Success",
+        "updatedAt": 2000,
+        "children": [
+          {
+            "id": "run-dev-api",
+            "task": "dev:api",
+            "cwd": "/repo",
+            "parentRunId": "run-dev",
+            "status": "Success",
+            "updatedAt": 2100,
+            "children": []
+          },
+          {
+            "id": "run-dev-web",
+            "task": "dev:web",
+            "cwd": "/repo",
+            "parentRunId": "run-dev",
+            "status": "Success",
+            "updatedAt": 2200,
+            "children": []
+          }
+        ]
+      }
+    ],
+    "checkRunning": [
+      {
+        "id": "run-check",
+        "task": "check",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 800,
+        "children": []
+      }
+    ],
+    "buildFailed": [
+      {
+        "id": "run-build",
+        "task": "build",
+        "cwd": "/repo",
+        "status": "Failed",
+        "updatedAt": 500,
+        "children": []
+      }
+    ],
+    "devQueuedWaiting": [
+      {
+        "id": "run-dev",
+        "task": "dev",
+        "cwd": "/repo",
+        "status": "Queued",
+        "updatedAt": 900,
+        "waitingOn": "dev:api",
+        "children": []
+      }
+    ],
+    "duplicateTaskKeys": [
+      {
+        "id": "run-old",
+        "task": "build",
+        "cwd": "/repo",
+        "status": "Success",
+        "updatedAt": 100,
+        "children": []
+      },
+      {
+        "id": "run-new",
+        "task": "build",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 300,
+        "children": []
+      }
+    ],
+    "prefixCollision": [
+      {
+        "id": "run-dev",
+        "task": "dev",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 100,
+        "children": []
+      },
+      {
+        "id": "run-development",
+        "task": "development",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 200,
+        "children": []
+      },
+      {
+        "id": "run-dev-api",
+        "task": "dev:api",
+        "cwd": "/repo",
+        "status": "Queued",
+        "updatedAt": 150,
+        "children": []
+      }
+    ],
+    "staleParentFreshChild": [
+      {
+        "id": "run-dev",
+        "task": "dev",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 10,
+        "children": [
+          {
+            "id": "run-dev-api",
+            "task": "dev:api",
+            "cwd": "/repo",
+            "parentRunId": "run-dev",
+            "status": "Running",
+            "updatedAt": 900,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "run-dev-2",
+        "task": "dev",
+        "cwd": "/repo",
+        "status": "Cancelled",
+        "updatedAt": 400,
+        "children": []
+      }
+    ]
+  }
+}

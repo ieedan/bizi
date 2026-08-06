@@ -1,0 +1,415 @@
+{
+  "$comment": "Log rendering primitives. Timestamp cases assume TZ=UTC; both harnesses set it.",
+  "formatTaskTagForLog": [
+    {
+      "task": "api",
+      "width": 10,
+      "expected": "[api]     "
+    },
+    {
+      "task": "dev:api",
+      "width": 12,
+      "expected": "[dev:api]   "
+    },
+    {
+      "task": "dev:api",
+      "width": 10,
+      "expected": "[dev:api] "
+    },
+    {
+      "name": "a name that will not fit is truncated with an ellipsis",
+      "task": "dev:api:watcher",
+      "width": 10,
+      "expected": "[dev:ap…] "
+    },
+    {
+      "name": "the width floor keeps the brackets renderable",
+      "task": "api",
+      "width": 0,
+      "expected": "[a…] "
+    },
+    {
+      "name": "an empty task name still pads",
+      "task": "",
+      "width": 8,
+      "expected": "[]      "
+    }
+  ],
+  "formatElapsedDuration": [
+    {
+      "input": -5,
+      "expected": "0ms"
+    },
+    {
+      "input": 0,
+      "expected": "0ms"
+    },
+    {
+      "input": 999,
+      "expected": "999ms"
+    },
+    {
+      "input": 1000,
+      "expected": "1s"
+    },
+    {
+      "input": 1999,
+      "expected": "1s"
+    },
+    {
+      "input": 59999,
+      "expected": "59s"
+    },
+    {
+      "input": 60000,
+      "expected": "1m 0s"
+    },
+    {
+      "input": 90500,
+      "expected": "1m 30s"
+    },
+    {
+      "input": 3599999,
+      "expected": "59m 59s"
+    },
+    {
+      "input": 3600000,
+      "expected": "1h 0m"
+    },
+    {
+      "input": 7500000,
+      "expected": "2h 5m"
+    }
+  ],
+  "formatLogTimestamp": [
+    {
+      "input": 0,
+      "expected": "00:00:00.000"
+    },
+    {
+      "input": 1000,
+      "expected": "00:00:01.000"
+    },
+    {
+      "input": 45296789,
+      "expected": "12:34:56.789"
+    },
+    {
+      "input": 86399999,
+      "expected": "23:59:59.999"
+    }
+  ],
+  "sanitizeLogForDisplay": [
+    {
+      "input": "plain",
+      "expected": "plain"
+    },
+    {
+      "input": "a \u001b[32mok\u001b[0m b",
+      "expected": "a ok b"
+    },
+    {
+      "input": "before\u001b]0;title\u0007after",
+      "expected": "beforeafter"
+    },
+    {
+      "name": "tabs survive the parser; the renderer is what expands them",
+      "input": "keep\tthe\ttabs",
+      "expected": "keep\tthe\ttabs"
+    },
+    {
+      "input": "drop\u0001control\u0002bytes",
+      "expected": "dropcontrolbytes"
+    },
+    {
+      "name": "a carriage return means the last write wins",
+      "input": "first\rsecond",
+      "expected": "second"
+    }
+  ],
+  "parseAnsiLogSegments": [
+    {
+      "name": "plain text is one unstyled segment",
+      "input": "hello",
+      "expected": [
+        {
+          "text": "hello",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "an empty line still yields one empty segment",
+      "input": "",
+      "expected": [
+        {
+          "text": "",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "basic foreground colors",
+      "input": "prefix \u001b[31mred\u001b[0m suffix",
+      "expected": [
+        {
+          "text": "prefix ",
+          "style": {}
+        },
+        {
+          "text": "red",
+          "style": {
+            "fg": "#aa0000"
+          }
+        },
+        {
+          "text": " suffix",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "bright foreground colors",
+      "input": "\u001b[91mbright\u001b[39mplain",
+      "expected": [
+        {
+          "text": "bright",
+          "style": {
+            "fg": "#ff5555"
+          }
+        },
+        {
+          "text": "plain",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "background colors",
+      "input": "\u001b[44mon-blue\u001b[49mafter",
+      "expected": [
+        {
+          "text": "on-blue",
+          "style": {
+            "bg": "#0000aa"
+          }
+        },
+        {
+          "text": "after",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "bright background colors",
+      "input": "\u001b[104mon-bright\u001b[0m",
+      "expected": [
+        {
+          "text": "on-bright",
+          "style": {
+            "bg": "#5555ff"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bold and dim cancel each other",
+      "input": "\u001b[1mbold\u001b[2mdim\u001b[22mnormal",
+      "expected": [
+        {
+          "text": "bold",
+          "style": {
+            "bold": true,
+            "dim": false
+          }
+        },
+        {
+          "text": "dim",
+          "style": {
+            "bold": false,
+            "dim": true
+          }
+        },
+        {
+          "text": "normal",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "italic and underline toggle independently",
+      "input": "\u001b[3mi\u001b[4mu\u001b[23mu-only\u001b[24mnone",
+      "expected": [
+        {
+          "text": "i",
+          "style": {
+            "italic": true
+          }
+        },
+        {
+          "text": "u",
+          "style": {
+            "italic": true,
+            "underline": true
+          }
+        },
+        {
+          "text": "u-only",
+          "style": {
+            "underline": true
+          }
+        },
+        {
+          "text": "none",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "256-color foreground from the cube",
+      "input": "\u001b[38;5;196mred256\u001b[0m",
+      "expected": [
+        {
+          "text": "red256",
+          "style": {
+            "fg": "#ff0000"
+          }
+        }
+      ]
+    },
+    {
+      "name": "256-color greyscale ramp",
+      "input": "\u001b[38;5;244mgrey\u001b[0m",
+      "expected": [
+        {
+          "text": "grey",
+          "style": {
+            "fg": "#808080"
+          }
+        }
+      ]
+    },
+    {
+      "name": "256-color index below 16 reuses the basic palette",
+      "input": "\u001b[48;5;9mbg\u001b[0m",
+      "expected": [
+        {
+          "text": "bg",
+          "style": {
+            "bg": "#ff5555"
+          }
+        }
+      ]
+    },
+    {
+      "name": "truecolor foreground",
+      "input": "\u001b[38;2;18;52;86mtrue\u001b[0m",
+      "expected": [
+        {
+          "text": "true",
+          "style": {
+            "fg": "#123456"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an out-of-range truecolor channel is ignored",
+      "input": "\u001b[38;2;300;0;0mplain",
+      "expected": [
+        {
+          "text": "plain",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "an empty SGR sequence resets",
+      "input": "\u001b[31mred\u001b[mplain",
+      "expected": [
+        {
+          "text": "red",
+          "style": {
+            "fg": "#aa0000"
+          }
+        },
+        {
+          "text": "plain",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "non-SGR CSI sequences are dropped without splitting the text",
+      "input": "a\u001b[2Kb\u001b[1;1Hc",
+      "expected": [
+        {
+          "text": "abc",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "OSC sequences and stray control bytes are stripped",
+      "input": "safe\u001b]0;title\u0007\u0001\u0002text",
+      "expected": [
+        {
+          "text": "safetext",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "a DCS string sequence is stripped whole",
+      "input": "a\u001bPq-payload-\u001b\\b",
+      "expected": [
+        {
+          "text": "ab",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "an unterminated escape leaves its payload as text",
+      "input": "hello \u001b[31",
+      "expected": [
+        {
+          "text": "hello 31",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "a carriage return keeps only the final write",
+      "input": "progress 10%\rprogress 100%",
+      "expected": [
+        {
+          "text": "progress 100%",
+          "style": {}
+        }
+      ]
+    },
+    {
+      "name": "styling from before a carriage return is discarded with the text",
+      "input": "\u001b[31mold\r\u001b[32mnew",
+      "expected": [
+        {
+          "text": "new",
+          "style": {
+            "fg": "#00aa00"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a tab is kept as a tab",
+      "input": "a\tb",
+      "expected": [
+        {
+          "text": "a\tb",
+          "style": {}
+        }
+      ]
+    }
+  ]
+}

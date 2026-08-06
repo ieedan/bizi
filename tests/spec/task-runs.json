@@ -1,0 +1,185 @@
+{
+  "$comment": "How run trees are indexed, merged and aggregated into the status shown per task row.",
+  "indexRunsByTaskKey": [
+    {
+      "name": "an empty run list indexes nothing",
+      "runs": "none",
+      "expected": {}
+    },
+    {
+      "name": "child runs are indexed under their own canonical task key",
+      "runs": "devRunning",
+      "expected": {
+        "dev": "run-dev",
+        "dev:api": "run-dev-api",
+        "dev:web": "run-dev-web"
+      }
+    },
+    {
+      "name": "the most recently active run wins for a repeated task key",
+      "runs": "duplicateTaskKeys",
+      "expected": { "build": "run-new" }
+    },
+    {
+      "name": "activity in a subtree keeps a stale-looking parent ahead of a newer root",
+      "runs": "staleParentFreshChild",
+      "expected": { "dev": "run-dev", "dev:api": "run-dev-api" }
+    }
+  ],
+  "buildDisplayStatusByTaskKey": [
+    {
+      "name": "leaf tasks report their own run status",
+      "tasks": "monorepo",
+      "runs": "buildFailed",
+      "expected": {
+        "dev": null,
+        "dev:api": null,
+        "dev:web": null,
+        "check": null,
+        "check:lint": null,
+        "check:types": null,
+        "build": "Failed"
+      }
+    },
+    {
+      "name": "a parent whose children agree reports that status",
+      "tasks": "monorepo",
+      "runs": "devRunning",
+      "expected": {
+        "dev": "Running",
+        "dev:api": "Running",
+        "dev:web": "Running",
+        "check": null,
+        "check:lint": null,
+        "check:types": null,
+        "build": null
+      }
+    },
+    {
+      "name": "a parent whose children disagree is indeterminate",
+      "tasks": "monorepo",
+      "runs": "devMixed",
+      "expected": {
+        "dev": "Indeterminate",
+        "dev:api": "Running",
+        "dev:web": "Failed",
+        "check": null,
+        "check:lint": null,
+        "check:types": null,
+        "build": null
+      }
+    },
+    {
+      "name": "a parent's own run never overrides its children",
+      "tasks": "groupOnly",
+      "runs": "devQueuedWaiting",
+      "expected": { "dev": null, "dev:api": null }
+    },
+    {
+      "name": "aggregation recurses through every level",
+      "tasks": "deep",
+      "runs": "none",
+      "expected": { "a": null, "a:b": null, "a:b:c": null, "z": null }
+    }
+  ],
+  "upsertRunTreeNode": [
+    {
+      "name": "an unknown run is appended as a new root",
+      "runs": "buildFailed",
+      "update": {
+        "id": "run-dev",
+        "task": "dev",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 900,
+        "children": []
+      },
+      "expectedRootIds": ["run-dev", "run-build"],
+      "expectedStatusById": { "run-dev": "Running", "run-build": "Failed" }
+    },
+    {
+      "name": "a known root is replaced in place",
+      "runs": "buildFailed",
+      "update": {
+        "id": "run-build",
+        "task": "build",
+        "cwd": "/repo",
+        "status": "Success",
+        "updatedAt": 700,
+        "children": []
+      },
+      "expectedRootIds": ["run-build"],
+      "expectedStatusById": { "run-build": "Success" }
+    },
+    {
+      "name": "a nested child is replaced without losing its siblings",
+      "runs": "devRunning",
+      "update": {
+        "id": "run-dev-web",
+        "task": "dev:web",
+        "cwd": "/repo",
+        "parentRunId": "run-dev",
+        "status": "Cancelled",
+        "updatedAt": 1400,
+        "children": []
+      },
+      "expectedRootIds": ["run-dev"],
+      "expectedStatusById": {
+        "run-dev": "Running",
+        "run-dev-api": "Running",
+        "run-dev-web": "Cancelled"
+      }
+    },
+    {
+      "name": "roots are re-sorted newest first",
+      "runs": "duplicateTaskKeys",
+      "update": {
+        "id": "run-old",
+        "task": "build",
+        "cwd": "/repo",
+        "status": "Running",
+        "updatedAt": 999,
+        "children": []
+      },
+      "expectedRootIds": ["run-old", "run-new"],
+      "expectedStatusById": { "run-old": "Running", "run-new": "Running" }
+    }
+  ],
+  "canCancelRun": [
+    {
+      "name": "a running leaf can be cancelled",
+      "run": { "status": "Running", "childCount": 0 },
+      "expected": true
+    },
+    {
+      "name": "a queued leaf can be cancelled",
+      "run": { "status": "Queued", "childCount": 0 },
+      "expected": true
+    },
+    {
+      "name": "a finished leaf cannot",
+      "run": { "status": "Success", "childCount": 0 },
+      "expected": false
+    },
+    {
+      "name": "a failed leaf cannot",
+      "run": { "status": "Failed", "childCount": 0 },
+      "expected": false
+    },
+    {
+      "name": "an already cancelled run cannot",
+      "run": { "status": "Cancelled", "childCount": 0 },
+      "expected": false
+    },
+    {
+      "name": "a parent can be cancelled even when it has finished, because children may still be live",
+      "run": { "status": "Success", "childCount": 2 },
+      "expected": true
+    },
+    {
+      "name": "a cancelled parent still cannot",
+      "run": { "status": "Cancelled", "childCount": 2 },
+      "expected": false
+    }
+  ]
+}

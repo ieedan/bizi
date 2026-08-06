@@ -9,8 +9,10 @@ interface TaskTreePanelProps {
 	taskSearchQuery: string;
 	isTaskSearchFocused: boolean;
 	hasTaskSearchError: boolean;
-	onTaskSearchInput: (value: string) => void;
 }
+
+const SEARCH_PLACEHOLDER = "/ Type task name...";
+const SEARCH_CURSOR = "▏";
 
 interface ScrollboxWithScrollTo {
 	scrollTo?: (position: number) => void;
@@ -140,13 +142,22 @@ export function TaskTreePanel(props: TaskTreePanelProps) {
 					marginBottom={1}
 					paddingX={1}
 				>
-					<input
-						focused={props.isTaskSearchFocused}
-						onInput={props.onTaskSearchInput}
-						placeholder="/ Type task name..."
-						value={props.taskSearchQuery}
-						width={35}
-					/>
+					{/*
+					 * Rendered rather than using an <input> so the state
+					 * machine in `lib/tui-state.ts` is the only owner of the
+					 * query text — otherwise the input and the key handler
+					 * would both try to edit it.
+					 */}
+					<text>
+						{props.taskSearchQuery.length === 0 ? (
+							<span style={{ fg: "#666666" }}>
+								{SEARCH_PLACEHOLDER}
+							</span>
+						) : (
+							props.taskSearchQuery
+						)}
+						{props.isTaskSearchFocused ? SEARCH_CURSOR : ""}
+					</text>
 				</box>
 			</box>
 			<box

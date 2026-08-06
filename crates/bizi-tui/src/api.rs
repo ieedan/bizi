@@ -35,9 +35,28 @@ macro_rules! unwrap_response {
     };
 }
 
+/// `BIZI_PORT`/`BIZI_HOST` point the client at a different server. Tests use it
+/// to talk to a mock server instead of the machine's real one.
+pub fn resolve_api_port(value: Option<&str>) -> u16 {
+    value
+        .and_then(|value| value.trim().parse::<u16>().ok())
+        .filter(|port| *port > 0)
+        .unwrap_or(BIZI_API_PORT)
+}
+
+pub fn resolve_api_host(value: Option<&str>) -> String {
+    value
+        .map(str::trim)
+        .filter(|host| !host.is_empty())
+        .unwrap_or(BIZI_API_HOST)
+        .to_string()
+}
+
 impl BiziApi {
     pub fn new() -> Self {
-        Self::with_target(BIZI_API_HOST.to_string(), BIZI_API_PORT)
+        let port = resolve_api_port(std::env::var("BIZI_PORT").ok().as_deref());
+        let host = resolve_api_host(std::env::var("BIZI_HOST").ok().as_deref());
+        Self::with_target(host, port)
     }
 
     pub fn with_target(host: String, port: u16) -> Self {

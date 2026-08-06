@@ -1,0 +1,31 @@
+{
+  "$comment": "Status glyphs and colors, plus the task.config.json color parser.",
+  "taskStatusDisplay": [
+    { "status": null, "icon": "○", "color": "#777777" },
+    { "status": "Indeterminate", "icon": "◐", "color": "#f4c542" },
+    { "status": "Queued", "icon": "○", "color": "#f4c542" },
+    { "status": "Running", "icon": "▶", "color": "#31d158" },
+    { "status": "Success", "icon": "✓", "color": "#4da3ff" },
+    { "status": "Failed", "icon": "✖", "color": "#ff3b30" },
+    { "status": "Cancelled", "icon": "■", "color": "#777777" }
+  ],
+  "resolveTaskLogColor": [
+    { "input": "red", "expected": "red" },
+    { "input": "Green", "expected": "green" },
+    { "input": "  cyan  ", "expected": "cyan" },
+    { "input": "black", "expected": "black" },
+    { "input": "yellow", "expected": "yellow" },
+    { "input": "blue", "expected": "blue" },
+    { "input": "magenta", "expected": "magenta" },
+    { "input": "white", "expected": "white" },
+    { "input": "#ff00aa", "expected": "#ff00aa" },
+    { "input": "#FF00AA", "expected": "#ff00aa" },
+    { "input": "#f0a", "expected": "#f0a" },
+    { "input": "#ff00a", "expected": null },
+    { "input": "#gggggg", "expected": null },
+    { "input": "chartreuse", "expected": null },
+    { "input": "", "expected": null },
+    { "input": "   ", "expected": null },
+    { "input": null, "expected": null }
+  ]
+}

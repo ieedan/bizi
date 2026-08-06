@@ -539,7 +539,13 @@ fn draw_run_status(buffer: &mut Buffer, layout: &FrameLayout, app: &App) {
         let footer_status = app.selected_footer_status();
         let display = task_status_display(footer_status.map(DisplayTaskStatus::Run));
         runs.push((display.icon.to_string(), Style::default().fg(display.color)));
-        runs.push((format!(" {}", run_status_text(app)), Style::default()));
+        runs.push((
+            format!(
+                " {}",
+                run_status_text(app, chrono::Local::now().timestamp_millis())
+            ),
+            Style::default(),
+        ));
     }
 
     let left_width: usize = runs.iter().map(|(text, _)| text.width()).sum();
@@ -553,9 +559,9 @@ fn draw_run_status(buffer: &mut Buffer, layout: &FrameLayout, app: &App) {
     draw_runs(buffer, x, layout.right_status_y, width, &runs);
 }
 
-/// Port of `RunDetailsPanel`'s `footerStatusText` memo.
-fn run_status_text(app: &App) -> String {
-    let now_ms = chrono::Local::now().timestamp_millis();
+/// Port of `RunDetailsPanel`'s `footerStatusText` memo. `now_ms` is passed in
+/// so the conformance suite can pin the clock.
+pub(super) fn run_status_text(app: &App, now_ms: i64) -> String {
     let selected_run_updated_at = app.selected_run().map(|run| run.updated_at);
     let first_log_timestamp = app.logs.first().map(|line| line.timestamp);
     let last_log_timestamp = app.logs.last().map(|line| line.timestamp);
@@ -612,8 +618,10 @@ fn run_status_text(app: &App) -> String {
     }
 }
 
-fn draw_footer(buffer: &mut Buffer, layout: &FrameLayout, app: &App) {
-    let mut actions: Vec<(&str, String)> = vec![("/", "find/run".to_string())];
+/// The shortcut hints in the footer, in order. Port of `footerActions` in the
+/// TypeScript client's `lib/view-state.ts`.
+pub(super) fn footer_actions(app: &App) -> Vec<(&'static str, String)> {
+    let mut actions: Vec<(&'static str, String)> = vec![("/", "find/run".to_string())];
     if app.selected_row().is_some() {
         actions.push(("r", app.selected_run_action().label().to_string()));
     }
@@ -625,6 +633,11 @@ fn draw_footer(buffer: &mut Buffer, layout: &FrameLayout, app: &App) {
     }
     actions.push(("ctrl+c", "copy".to_string()));
     actions.push(("q", "quit".to_string()));
+    actions
+}
+
+fn draw_footer(buffer: &mut Buffer, layout: &FrameLayout, app: &App) {
+    let actions = footer_actions(app);
 
     let mut runs: Runs = Vec::new();
     for (index, (key, label)) in actions.iter().enumerate() {

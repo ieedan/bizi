@@ -1,0 +1,89 @@
+{
+  "$comment": "Jump-to-next-parent chord. macOS terminals send Option as Alt; everywhere else it is Ctrl.",
+  "cases": [
+    {
+      "name": "option+down jumps forward on macOS",
+      "key": { "name": "down", "option": true },
+      "isMacOs": true,
+      "forward": true,
+      "backward": false
+    },
+    {
+      "name": "option+j jumps forward on macOS",
+      "key": { "name": "j", "option": true },
+      "isMacOs": true,
+      "forward": true,
+      "backward": false
+    },
+    {
+      "name": "option+up jumps backward on macOS",
+      "key": { "name": "up", "option": true },
+      "isMacOs": true,
+      "forward": false,
+      "backward": true
+    },
+    {
+      "name": "option+k jumps backward on macOS",
+      "key": { "name": "k", "option": true },
+      "isMacOs": true,
+      "forward": false,
+      "backward": true
+    },
+    {
+      "name": "ctrl is not the macOS chord",
+      "key": { "name": "down", "ctrl": true },
+      "isMacOs": true,
+      "forward": false,
+      "backward": false
+    },
+    {
+      "name": "ctrl+down jumps forward off macOS",
+      "key": { "name": "down", "ctrl": true },
+      "isMacOs": false,
+      "forward": true,
+      "backward": false
+    },
+    {
+      "name": "ctrl+j jumps forward off macOS",
+      "key": { "name": "j", "ctrl": true },
+      "isMacOs": false,
+      "forward": true,
+      "backward": false
+    },
+    {
+      "name": "ctrl+up jumps backward off macOS",
+      "key": { "name": "up", "ctrl": true },
+      "isMacOs": false,
+      "forward": false,
+      "backward": true
+    },
+    {
+      "name": "ctrl+k jumps backward off macOS",
+      "key": { "name": "k", "ctrl": true },
+      "isMacOs": false,
+      "forward": false,
+      "backward": true
+    },
+    {
+      "name": "option is not the chord off macOS",
+      "key": { "name": "down", "option": true },
+      "isMacOs": false,
+      "forward": false,
+      "backward": false
+    },
+    {
+      "name": "an unmodified arrow is never a jump",
+      "key": { "name": "down" },
+      "isMacOs": true,
+      "forward": false,
+      "backward": false
+    },
+    {
+      "name": "the chord only applies to the movement keys",
+      "key": { "name": "r", "option": true },
+      "isMacOs": true,
+      "forward": false,
+      "backward": false
+    }
+  ]
+}

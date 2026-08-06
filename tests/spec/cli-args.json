@@ -1,0 +1,81 @@
+{
+  "$comment": "argv preprocessing shared by both clients: finding the first positional token and rewriting `bizi <task>` into `bizi run <task>`.",
+  "findFirstPositionalTokenIndex": [
+    { "argv": [], "expected": null },
+    { "argv": ["-C", "/tmp"], "expected": null },
+    { "argv": ["--cwd", "/tmp"], "expected": null },
+    { "argv": ["--cwd=/tmp"], "expected": null },
+    { "argv": ["dev"], "expected": 0 },
+    { "argv": ["-C", "/tmp", "dev"], "expected": 2 },
+    { "argv": ["--cwd", "/tmp", "dev"], "expected": 2 },
+    { "argv": ["--cwd=/tmp", "dev"], "expected": 1 },
+    { "argv": ["--json", "stat", "dev"], "expected": 1 },
+    { "argv": ["--", "dev"], "expected": 1 },
+    { "argv": ["--"], "expected": null },
+    { "argv": ["-C", "/tmp", "--", "dev"], "expected": 3 },
+    { "argv": ["--version"], "expected": null },
+    { "argv": ["-C", "/tmp", "run", "dev", "--non-interactive"], "expected": 2 }
+  ],
+  "normalizeImplicitRunCommand": [
+    {
+      "name": "a bare task name becomes a run",
+      "argv": ["dev"],
+      "expectedArgv": ["run", "dev"],
+      "expectedImplicit": true
+    },
+    {
+      "name": "a namespaced task name becomes a run",
+      "argv": ["dev:api"],
+      "expectedArgv": ["run", "dev:api"],
+      "expectedImplicit": true
+    },
+    {
+      "name": "flags before the task are preserved in place",
+      "argv": ["-C", "/tmp", "dev:api"],
+      "expectedArgv": ["-C", "/tmp", "run", "dev:api"],
+      "expectedImplicit": true
+    },
+    {
+      "name": "run is left alone",
+      "argv": ["run", "dev"],
+      "expectedArgv": ["run", "dev"],
+      "expectedImplicit": false
+    },
+    {
+      "name": "cancel is left alone",
+      "argv": ["cancel", "dev"],
+      "expectedArgv": ["cancel", "dev"],
+      "expectedImplicit": false
+    },
+    {
+      "name": "stat is left alone",
+      "argv": ["stat", "dev", "--json"],
+      "expectedArgv": ["stat", "dev", "--json"],
+      "expectedImplicit": false
+    },
+    {
+      "name": "init is left alone",
+      "argv": ["init"],
+      "expectedArgv": ["init"],
+      "expectedImplicit": false
+    },
+    {
+      "name": "no positional means no rewrite",
+      "argv": ["-C", "/tmp"],
+      "expectedArgv": ["-C", "/tmp"],
+      "expectedImplicit": false
+    },
+    {
+      "name": "an empty argv is untouched",
+      "argv": [],
+      "expectedArgv": [],
+      "expectedImplicit": false
+    },
+    {
+      "name": "a task named after a subcommand still needs the explicit form",
+      "argv": ["-C", "/tmp", "run"],
+      "expectedArgv": ["-C", "/tmp", "run"],
+      "expectedImplicit": false
+    }
+  ]
+}

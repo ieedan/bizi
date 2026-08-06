@@ -122,7 +122,7 @@ export async function resolveCliMode(
 	return { mode: "cli", exitCode: commandExitCode };
 }
 
-function normalizeImplicitRunCommand(argv: string[]): {
+export function normalizeImplicitRunCommand(argv: string[]): {
 	argv: string[];
 	wasImplicitRun: boolean;
 } {
@@ -141,7 +141,7 @@ function normalizeImplicitRunCommand(argv: string[]): {
 	return { argv: normalized, wasImplicitRun: true };
 }
 
-function findFirstPositionalTokenIndex(argv: string[]): number {
+export function findFirstPositionalTokenIndex(argv: string[]): number {
 	for (let index = 0; index < argv.length; index += 1) {
 		const token = argv[index];
 		if (!token) {

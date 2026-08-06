@@ -2,6 +2,8 @@ mod api;
 mod cli;
 mod cli_task_runs;
 mod commands;
+#[cfg(test)]
+mod conformance;
 mod keyboard;
 mod logs;
 mod model;
@@ -20,9 +22,17 @@ fn main() {
     let mode = match resolve_cli_mode(&argv) {
         Ok(mode) => mode,
         Err(error) => {
+            if error.kind() == clap::error::ErrorKind::DisplayVersion {
+                // clap would print "bizi <version>"; the TypeScript client
+                // prints the bare version, and that is what the conformance
+                // suite pins.
+                println!("{}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
             let _ = error.print();
-            // clap exits 2 on a usage error where the TypeScript client exits
-            // 1. `--help` and `--version` still exit 0.
+            // clap exits 2 on a usage error; the TypeScript client exits 1, and
+            // that is the contract the conformance suite pins. `--help` and
+            // `--version` still exit 0.
             let exit_code = if error.exit_code() == 0 { 0 } else { 1 };
             std::process::exit(exit_code);
         }

@@ -10,11 +10,11 @@ import {
 } from "solid-js";
 import { useAppContext } from "../lib/app-context";
 import {
-	formatElapsedDuration,
 	formatLogTimestamp,
 	formatTaskTagForLog,
 	parseAnsiLogSegments,
 } from "../lib/logs";
+import { runStatusText } from "../lib/view-state";
 import { StatusIndicator } from "./status-indicator";
 
 const LOG_LINE_HEIGHT = 1;
@@ -163,8 +163,6 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 		return { start, end, virtualized: true };
 	});
 	const panelBorderColor = () => (props.isFocused ? "#e6e6e6" : "#666666");
-	const waitingOn = () => props.waitingOn?.trim() ?? "";
-	const waitingOnText = () => waitingOn().replace(/\s+/g, " ").trim();
 	const firstLogTimestamp = createMemo(
 		() => props.logs[0]?.timestamp ?? null
 	);
@@ -177,48 +175,17 @@ export function RunDetailsPanel(props: RunDetailsPanelProps) {
 		onCleanup(() => clearInterval(timer));
 	});
 
-	const runStartTimestamp = createMemo(
-		() => firstLogTimestamp() ?? props.selectedRunUpdatedAt ?? nowMs()
+	const footerStatusText = createMemo(() =>
+		runStatusText({
+			footerStatus: props.selectedFooterStatus,
+			displayStatusLabel: props.selectedStatus,
+			waitingOn: props.waitingOn,
+			selectedRunUpdatedAt: props.selectedRunUpdatedAt,
+			firstLogTimestamp: firstLogTimestamp(),
+			lastLogTimestamp: lastLogTimestamp(),
+			nowMs: nowMs(),
+		})
 	);
-	const runEndTimestamp = createMemo(() => {
-		const status = props.selectedFooterStatus;
-		if (status === "Running" || status === "Queued") {
-			return nowMs();
-		}
-		return lastLogTimestamp() ?? props.selectedRunUpdatedAt ?? nowMs();
-	});
-	const runDurationMs = createMemo(
-		() => runEndTimestamp() - runStartTimestamp()
-	);
-	const waitingDurationMs = createMemo(
-		() => nowMs() - (props.selectedRunUpdatedAt ?? runStartTimestamp())
-	);
-
-	const footerStatusText = createMemo(() => {
-		const waitingOnValue = waitingOnText();
-		if (waitingOnValue.length > 0) {
-			return `Waiting on ${waitingOnValue} for ${formatElapsedDuration(waitingDurationMs())}`;
-		}
-
-		const runStatus = props.selectedFooterStatus;
-		if (runStatus === "Running") {
-			return `Running for ${formatElapsedDuration(runDurationMs())}`;
-		}
-		if (runStatus === "Cancelled") {
-			return `Canceled after ${formatElapsedDuration(runDurationMs())}`;
-		}
-		if (runStatus === "Success") {
-			return `Succeeded in ${formatElapsedDuration(runDurationMs())}`;
-		}
-		if (runStatus === "Failed") {
-			return `Failed after ${formatElapsedDuration(runDurationMs())}`;
-		}
-		if (runStatus === "Queued") {
-			return `Queued for ${formatElapsedDuration(runDurationMs())}`;
-		}
-
-		return (props.selectedStatus ?? "Idle").replace(/\s+/g, " ").trim();
-	});
 	return (
 		<box flexDirection="column" flexGrow={1}>
 			<box

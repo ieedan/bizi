@@ -76,7 +76,7 @@ pub fn resolve_cli_mode(argv: &[String]) -> Result<CliMode, clap::Error> {
     }
 }
 
-fn normalize_implicit_run_command(argv: &[String]) -> (Vec<String>, bool) {
+pub(crate) fn normalize_implicit_run_command(argv: &[String]) -> (Vec<String>, bool) {
     let Some(first_positional_index) = find_first_positional_token_index(argv) else {
         return (argv.to_vec(), false);
     };
@@ -91,7 +91,7 @@ fn normalize_implicit_run_command(argv: &[String]) -> (Vec<String>, bool) {
     (normalized, true)
 }
 
-fn find_first_positional_token_index(argv: &[String]) -> Option<usize> {
+pub(crate) fn find_first_positional_token_index(argv: &[String]) -> Option<usize> {
     let mut index = 0usize;
     while index < argv.len() {
         let token = argv[index].as_str();

@@ -7,6 +7,11 @@
   "packageManager": "pnpm@10.28.2",
   "scripts": {
     "generate:clients": "pnpm --filter './packages/client-*' generate",
+    "test": "bun run scripts/test.ts",
+    "test:ts": "cd apps/tui && TZ=UTC bun test tests/",
+    "test:rs": "TZ=UTC cargo test -p bizi-tui",
+    "test:e2e": "TZ=UTC bun test tests/e2e/",
+    "test:e2e:rs": "cargo build -p bizi-tui && TZ=UTC BIZI_CLIENT=rust bun test tests/e2e/",
     "check": "ultracite check",
     "fix": "ultracite fix"
   },

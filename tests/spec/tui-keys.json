@@ -1,0 +1,580 @@
+{
+  "$comment": [
+    "Keyboard behavior of the interactive TUI, as a state machine.",
+    "Each case loads a task map and run tree, applies `initial` overrides, feeds `keys` in order, then asserts the fields present in `expect`.",
+    "`effects` is the full list of server calls the keys asked for, in order. Quitting is asserted via `shouldQuit`, not as an effect.",
+    "Every case starts with 2 buffered log lines so `logCount` can show when a restart clears them."
+  ],
+  "cases": [
+    {
+      "name": "down moves the selection to the next row",
+      "keys": [{ "name": "down" }],
+      "expect": { "selectedIndex": 1, "effects": [] }
+    },
+    {
+      "name": "j moves the selection down",
+      "keys": [{ "name": "j" }],
+      "expect": { "selectedIndex": 1 }
+    },
+    {
+      "name": "down stops at the last row",
+      "initial": { "selectedIndex": 6 },
+      "keys": [{ "name": "down" }, { "name": "down" }],
+      "expect": { "selectedIndex": 6 }
+    },
+    {
+      "name": "up moves the selection back",
+      "initial": { "selectedIndex": 2 },
+      "keys": [{ "name": "up" }],
+      "expect": { "selectedIndex": 1 }
+    },
+    {
+      "name": "up at the top row focuses the search box without typing into it",
+      "keys": [{ "name": "up" }],
+      "expect": {
+        "selectedIndex": 0,
+        "isTaskSearchFocused": true,
+        "taskSearchQuery": ""
+      }
+    },
+    {
+      "name": "k at the top row focuses the search box and types itself",
+      "keys": [{ "name": "k" }],
+      "expect": { "isTaskSearchFocused": true, "taskSearchQuery": "k" }
+    },
+    {
+      "name": "option+down jumps to the next parent on macOS",
+      "isMacOs": true,
+      "keys": [{ "name": "down", "option": true }],
+      "expect": { "selectedIndex": 3 }
+    },
+    {
+      "name": "option+down on the last parent stays put",
+      "isMacOs": true,
+      "initial": { "selectedIndex": 6 },
+      "keys": [{ "name": "down", "option": true }],
+      "expect": { "selectedIndex": 6 }
+    },
+    {
+      "name": "option+up jumps back to the previous parent on macOS",
+      "isMacOs": true,
+      "initial": { "selectedIndex": 5 },
+      "keys": [{ "name": "up", "option": true }],
+      "expect": { "selectedIndex": 3 }
+    },
+    {
+      "name": "ctrl+down jumps to the next parent off macOS",
+      "isMacOs": false,
+      "keys": [{ "name": "down", "ctrl": true }],
+      "expect": { "selectedIndex": 3 }
+    },
+    {
+      "name": "ctrl+up at the top parent does not fall through to the search box",
+      "isMacOs": false,
+      "keys": [{ "name": "up", "ctrl": true }],
+      "expect": { "selectedIndex": 0, "isTaskSearchFocused": false }
+    },
+    {
+      "name": "navigation on an empty task list does nothing",
+      "tasks": "empty",
+      "keys": [{ "name": "down" }, { "name": "r" }, { "name": "c" }],
+      "expect": { "selectedIndex": 0, "effects": [] }
+    },
+
+    {
+      "name": "right focuses the log pane",
+      "keys": [{ "name": "right" }],
+      "expect": { "focusedPane": "logs" }
+    },
+    {
+      "name": "l focuses the log pane",
+      "keys": [{ "name": "l" }],
+      "expect": { "focusedPane": "logs" }
+    },
+    {
+      "name": "left returns to the task pane",
+      "keys": [{ "name": "right" }, { "name": "left" }],
+      "expect": { "focusedPane": "tasks" }
+    },
+    {
+      "name": "h returns to the task pane",
+      "keys": [{ "name": "l" }, { "name": "h" }],
+      "expect": { "focusedPane": "tasks" }
+    },
+    {
+      "name": "left in the task pane does nothing",
+      "initial": { "selectedIndex": 2 },
+      "keys": [{ "name": "left" }],
+      "expect": { "focusedPane": "tasks", "selectedIndex": 2 }
+    },
+    {
+      "name": "the log pane owns vertical movement, so the selection stays put",
+      "initial": { "focusedPane": "logs", "selectedIndex": 2 },
+      "keys": [
+        { "name": "down" },
+        { "name": "j" },
+        { "name": "up" },
+        { "name": "k" }
+      ],
+      "expect": { "selectedIndex": 2, "focusedPane": "logs" }
+    },
+    {
+      "name": "action keys still work while the log pane is focused",
+      "runs": "devRunning",
+      "initial": { "focusedPane": "logs", "selectedIndex": 6 },
+      "keys": [{ "name": "r" }],
+      "expect": { "effects": [{ "type": "runTask", "taskKey": "build" }] }
+    },
+
+    {
+      "name": "r starts a task that has never run",
+      "runs": "none",
+      "keys": [{ "name": "r" }],
+      "expect": {
+        "effects": [{ "type": "runTask", "taskKey": "dev" }],
+        "logCount": 2
+      }
+    },
+    {
+      "name": "r restarts a live task and clears the log buffer",
+      "runs": "devRunning",
+      "keys": [{ "name": "r" }],
+      "expect": {
+        "effects": [{ "type": "restartRun", "runId": "run-dev" }],
+        "logCount": 0
+      }
+    },
+    {
+      "name": "r restarts a selected subtask",
+      "runs": "devRunning",
+      "initial": { "selectedIndex": 1 },
+      "keys": [{ "name": "r" }],
+      "expect": {
+        "effects": [{ "type": "restartRun", "runId": "run-dev-api" }]
+      }
+    },
+    {
+      "name": "r on a subtask with no run does nothing",
+      "runs": "none",
+      "initial": { "selectedIndex": 1 },
+      "keys": [{ "name": "r" }],
+      "expect": { "effects": [], "logCount": 2 }
+    },
+    {
+      "name": "r runs a finished task again",
+      "runs": "devSucceeded",
+      "keys": [{ "name": "r" }],
+      "expect": { "effects": [{ "type": "runTask", "taskKey": "dev" }] }
+    },
+
+    {
+      "name": "c cancels the selected run",
+      "runs": "devRunning",
+      "keys": [{ "name": "c" }],
+      "expect": { "effects": [{ "type": "cancelRun", "runId": "run-dev" }] }
+    },
+    {
+      "name": "c on a finished leaf does nothing",
+      "runs": "devSucceeded",
+      "initial": { "selectedIndex": 1 },
+      "keys": [{ "name": "c" }],
+      "expect": { "effects": [] }
+    },
+    {
+      "name": "c on a task with no run does nothing",
+      "runs": "none",
+      "keys": [{ "name": "c" }],
+      "expect": { "effects": [] }
+    },
+
+    {
+      "name": "m toggles the log mode for a task that has both children and a command",
+      "initial": { "selectedIndex": 3 },
+      "keys": [{ "name": "m" }],
+      "expect": { "logMode": "selected" }
+    },
+    {
+      "name": "m toggles back",
+      "initial": { "selectedIndex": 3 },
+      "keys": [{ "name": "m" }, { "name": "m" }],
+      "expect": { "logMode": "aggregate" }
+    },
+    {
+      "name": "m does nothing for a grouping task",
+      "initial": { "selectedIndex": 0 },
+      "keys": [{ "name": "m" }],
+      "expect": { "logMode": "aggregate" }
+    },
+    {
+      "name": "m does nothing for a leaf",
+      "initial": { "selectedIndex": 6 },
+      "keys": [{ "name": "m" }],
+      "expect": { "logMode": "aggregate" }
+    },
+
+    {
+      "name": "slash focuses the search box and is not typed into it",
+      "keys": [{ "name": "/" }],
+      "expect": { "isTaskSearchFocused": true, "taskSearchQuery": "" }
+    },
+    {
+      "name": "slash while searching is ignored",
+      "keys": [{ "name": "/" }, { "name": "d" }, { "name": "/" }],
+      "expect": { "taskSearchQuery": "d" }
+    },
+    {
+      "name": "typing builds up the query",
+      "keys": [
+        { "name": "/" },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "v" }
+      ],
+      "expect": { "taskSearchQuery": "dev", "isTaskSearchFocused": true }
+    },
+    {
+      "name": "a colon can be typed for namespaced tasks",
+      "keys": [
+        { "name": "/" },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "v" },
+        { "name": ":" },
+        { "name": "a" }
+      ],
+      "expect": { "taskSearchQuery": "dev:a" }
+    },
+    {
+      "name": "backspace deletes the last character",
+      "keys": [
+        { "name": "/" },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "backspace" }
+      ],
+      "expect": { "taskSearchQuery": "d" }
+    },
+    {
+      "name": "backspace on an empty query is harmless",
+      "keys": [{ "name": "/" }, { "name": "backspace" }],
+      "expect": { "taskSearchQuery": "" }
+    },
+    {
+      "name": "escape clears and closes the search box",
+      "keys": [
+        { "name": "/" },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "escape" }
+      ],
+      "expect": {
+        "taskSearchQuery": "",
+        "isTaskSearchFocused": false,
+        "showTaskSearchError": false
+      }
+    },
+    {
+      "name": "down leaves the search box for the top of the task list",
+      "initial": { "selectedIndex": 4 },
+      "keys": [{ "name": "/" }, { "name": "down" }],
+      "expect": {
+        "isTaskSearchFocused": false,
+        "focusedPane": "tasks",
+        "selectedIndex": 0
+      }
+    },
+    {
+      "name": "enter on an empty query does nothing",
+      "keys": [{ "name": "/" }, { "name": "enter" }],
+      "expect": {
+        "showTaskSearchError": false,
+        "isTaskSearchFocused": true,
+        "effects": []
+      }
+    },
+    {
+      "name": "enter on an unknown task flags the search box",
+      "keys": [
+        { "name": "/" },
+        { "name": "n" },
+        { "name": "o" },
+        { "name": "p" },
+        { "name": "e" },
+        { "name": "enter" }
+      ],
+      "expect": {
+        "showTaskSearchError": true,
+        "isTaskSearchFocused": true,
+        "taskSearchQuery": "nope",
+        "effects": []
+      }
+    },
+    {
+      "name": "typing after a failed search clears the error",
+      "keys": [
+        { "name": "/" },
+        { "name": "n" },
+        { "name": "enter" },
+        { "name": "o" }
+      ],
+      "expect": { "showTaskSearchError": false }
+    },
+    {
+      "name": "an exact match on a task that has never run starts it and closes the search box",
+      "runs": "none",
+      "keys": [
+        { "name": "/" },
+        { "name": "b" },
+        { "name": "u" },
+        { "name": "i" },
+        { "name": "l" },
+        { "name": "d" },
+        { "name": "enter" }
+      ],
+      "expect": {
+        "effects": [{ "type": "runTask", "taskKey": "build" }],
+        "selectedIndex": 6,
+        "taskSearchQuery": "",
+        "isTaskSearchFocused": false
+      }
+    },
+    {
+      "name": "an exact match on a live task restarts it",
+      "runs": "devRunning",
+      "keys": [
+        { "name": "/" },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "v" },
+        { "name": "enter" }
+      ],
+      "expect": {
+        "effects": [{ "type": "restartRun", "runId": "run-dev" }],
+        "selectedIndex": 0,
+        "taskSearchQuery": "",
+        "logCount": 0
+      }
+    },
+    {
+      "name": "an exact match on a subtask restarts that subtask's run",
+      "runs": "devRunning",
+      "keys": [
+        { "name": "/" },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "v" },
+        { "name": ":" },
+        { "name": "w" },
+        { "name": "e" },
+        { "name": "b" },
+        { "name": "enter" }
+      ],
+      "expect": {
+        "effects": [{ "type": "restartRun", "runId": "run-dev-web" }],
+        "selectedIndex": 2
+      }
+    },
+    {
+      "name": "an exact match on a subtask with no run reports why it cannot restart",
+      "runs": "none",
+      "keys": [
+        { "name": "/" },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "v" },
+        { "name": ":" },
+        { "name": "a" },
+        { "name": "p" },
+        { "name": "i" },
+        { "name": "enter" }
+      ],
+      "expect": {
+        "effects": [],
+        "selectedIndex": 1,
+        "errorMessage": "Cannot restart subtask without an existing parent-linked run.",
+        "isTaskSearchFocused": true
+      }
+    },
+    {
+      "name": "a partial match is not a match",
+      "runs": "none",
+      "keys": [
+        { "name": "/" },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "enter" }
+      ],
+      "expect": { "showTaskSearchError": true, "effects": [] }
+    },
+    {
+      "name": "surrounding whitespace is trimmed before matching",
+      "runs": "none",
+      "keys": [
+        { "name": "/" },
+        { "name": " " },
+        { "name": "d" },
+        { "name": "e" },
+        { "name": "v" },
+        { "name": " " },
+        { "name": "enter" }
+      ],
+      "expect": { "effects": [{ "type": "runTask", "taskKey": "dev" }] }
+    },
+    {
+      "name": "q quits even while the search box is focused",
+      "runs": "none",
+      "keys": [{ "name": "/" }, { "name": "q" }],
+      "expect": { "shouldQuit": true, "taskSearchQuery": "" }
+    },
+
+    {
+      "name": "q quits straight away when nothing is running",
+      "runs": "devSucceeded",
+      "keys": [{ "name": "q" }],
+      "expect": { "shouldQuit": true, "showQuitConfirmation": false }
+    },
+    {
+      "name": "ctrl+c quits when there is no selection to copy",
+      "runs": "none",
+      "keys": [{ "name": "c", "ctrl": true }],
+      "expect": { "shouldQuit": true }
+    },
+    {
+      "name": "ctrl+c copies instead of quitting when text is selected",
+      "runs": "none",
+      "initial": { "hasSelection": true },
+      "keys": [{ "name": "c", "ctrl": true }],
+      "expect": { "shouldQuit": false, "effects": [] }
+    },
+    {
+      "name": "q asks first when tasks are still running",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }],
+      "expect": {
+        "showQuitConfirmation": true,
+        "quitActionIndex": 0,
+        "shouldQuit": false,
+        "effects": []
+      }
+    },
+    {
+      "name": "n exits the confirmation without cancelling anything",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "n" }],
+      "expect": { "shouldQuit": true, "effects": [] }
+    },
+    {
+      "name": "y cancels every running task before exiting",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "y" }],
+      "expect": {
+        "isCancellingBeforeExit": true,
+        "shouldQuit": false,
+        "effects": [
+          {
+            "type": "cancelRunsBeforeExit",
+            "runIds": ["run-dev", "run-dev-api", "run-dev-web"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "q in the confirmation also cancels everything",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "q" }],
+      "expect": { "isCancellingBeforeExit": true }
+    },
+    {
+      "name": "ctrl+c in the confirmation also cancels everything",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "c", "ctrl": true }],
+      "expect": { "isCancellingBeforeExit": true }
+    },
+    {
+      "name": "right moves to the second confirmation action",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "right" }],
+      "expect": { "quitActionIndex": 1, "shouldQuit": false }
+    },
+    {
+      "name": "the confirmation actions wrap around",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "right" }, { "name": "right" }],
+      "expect": { "quitActionIndex": 0 }
+    },
+    {
+      "name": "left wraps backwards from the first action",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "left" }],
+      "expect": { "quitActionIndex": 1 }
+    },
+    {
+      "name": "brackets move between the confirmation actions too",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "]" }, { "name": "[" }],
+      "expect": { "quitActionIndex": 0 }
+    },
+    {
+      "name": "enter runs the highlighted confirmation action",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "right" }, { "name": "enter" }],
+      "expect": { "shouldQuit": true, "effects": [] }
+    },
+    {
+      "name": "enter on the first action cancels everything",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "enter" }],
+      "expect": {
+        "isCancellingBeforeExit": true,
+        "effects": [
+          {
+            "type": "cancelRunsBeforeExit",
+            "runIds": ["run-dev", "run-dev-api", "run-dev-web"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "the confirmation ignores keys it does not use",
+      "runs": "devRunning",
+      "keys": [{ "name": "q" }, { "name": "z" }, { "name": "r" }],
+      "expect": {
+        "showQuitConfirmation": true,
+        "shouldQuit": false,
+        "effects": []
+      }
+    },
+    {
+      "name": "keys are ignored once cancellation is under way",
+      "runs": "devRunning",
+      "initial": {
+        "showQuitConfirmation": true,
+        "isCancellingBeforeExit": true
+      },
+      "keys": [{ "name": "n" }, { "name": "y" }, { "name": "enter" }],
+      "expect": { "shouldQuit": false, "effects": [] }
+    },
+    {
+      "name": "only a queued run is enough to trigger the confirmation",
+      "tasks": "groupOnly",
+      "runs": "devQueuedWaiting",
+      "keys": [{ "name": "q" }],
+      "expect": { "showQuitConfirmation": true }
+    },
+
+    {
+      "name": "key repeats and releases are ignored",
+      "keys": [
+        { "name": "down", "eventType": "release" },
+        { "name": "down", "eventType": "repeat" }
+      ],
+      "expect": { "selectedIndex": 0 }
+    },
+    {
+      "name": "an unrecognised key changes nothing",
+      "runs": "devRunning",
+      "keys": [{ "name": "z" }, { "name": "f1" }],
+      "expect": { "selectedIndex": 0, "effects": [], "shouldQuit": false }
+    }
+  ]
+}

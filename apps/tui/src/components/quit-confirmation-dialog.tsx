@@ -1,62 +1,23 @@
-import { useKeyboard } from "@opentui/solid";
-import { createSignal, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
+import { QUIT_ACTIONS } from "../lib/tui-state";
+import type { RunningTaskRow } from "../lib/view-state";
 import { StatusIndicator } from "./status-indicator";
 
-export interface RunningTaskRow {
-	key: string;
-	depth: number;
-	status: "Queued" | "Running";
-}
-
-export type QuitConfirmationAction = "cancelAll" | "exitWithoutCancelling";
+export type { RunningTaskRow };
 
 interface QuitConfirmationDialogProps {
 	isCancelling: boolean;
-	onConfirm: (action: QuitConfirmationAction) => void;
 	runningTasks: RunningTaskRow[];
+	selectedActionIndex: number;
 }
 
 const DIALOG_WIDTH = 84;
+const ACTIONS = QUIT_ACTIONS;
 
-const ACTIONS: { label: string; action: QuitConfirmationAction }[] = [
-	{ label: "Cancel All [y/q]", action: "cancelAll" },
-	{ label: "Exit without cancelling [n]", action: "exitWithoutCancelling" },
-];
-
+// Keys are handled by the state machine in `lib/tui-state.ts`; this component
+// only renders what that state says.
 export function QuitConfirmationDialog(props: QuitConfirmationDialogProps) {
-	const [selectedIndex, setSelectedIndex] = createSignal(0);
-
-	useKeyboard((key) => {
-		if (props.isCancelling) {
-			return;
-		}
-		if (
-			key.name === "y" ||
-			key.name === "q" ||
-			(key.ctrl && key.name === "c")
-		) {
-			props.onConfirm("cancelAll");
-			return;
-		}
-		if (key.name === "n") {
-			props.onConfirm("exitWithoutCancelling");
-			return;
-		}
-		if (key.name === "left" || key.name === "[") {
-			setSelectedIndex((i) => (i === 0 ? ACTIONS.length - 1 : i - 1));
-			return;
-		}
-		if (key.name === "right" || key.name === "]") {
-			setSelectedIndex((i) => (i === ACTIONS.length - 1 ? 0 : i + 1));
-			return;
-		}
-		if (key.name === "enter" || key.name === "return") {
-			const action = ACTIONS[selectedIndex()];
-			if (action) {
-				props.onConfirm(action.action);
-			}
-		}
-	});
+	const selectedIndex = () => props.selectedActionIndex;
 
 	return (
 		<box

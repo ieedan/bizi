@@ -1,0 +1,895 @@
+{
+  "$comment": [
+    "Black-box scenarios for the one-shot commands. Each one boots a mock bizi-server, runs the client under test against it, and checks the exit code, the streams and the requests the client made.",
+    "`stdout`/`stderr` entries are substrings that must appear in order. `requests` entries must all appear in the recorded request log.",
+    "Clients run with NO_COLOR=1 and a non-TTY stdout, so prompts are disabled and output is plain."
+  ],
+  "scenarios": [
+    {
+      "name": "stat prints a status tree for a running task",
+      "argv": [
+        "stat",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devRunning"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "\u25b6 dev (Running)",
+          "\u251c\u2500 \u25b6 dev:api (Running)",
+          "\u2514\u2500 \u25b6 dev:web (Running)"
+        ]
+      }
+    },
+    {
+      "name": "stat shows Indeterminate when children disagree",
+      "argv": [
+        "stat",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devMixed"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "\u25d0 dev (Indeterminate)",
+          "\u251c\u2500 \u25b6 dev:api (Running)",
+          "\u2514\u2500 \u2716 dev:web (Failed)"
+        ]
+      }
+    },
+    {
+      "name": "stat shows Idle for tasks that have never run",
+      "argv": [
+        "stat",
+        "check"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "\u25cb check (Idle)",
+          "\u251c\u2500 \u25cb check:lint (Idle)",
+          "\u2514\u2500 \u25cb check:types (Idle)"
+        ]
+      }
+    },
+    {
+      "name": "stat on a leaf task prints a single line",
+      "argv": [
+        "stat",
+        "build"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "buildFailed"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "\u2716 build (Failed)"
+        ]
+      }
+    },
+    {
+      "name": "stat on an unknown task with no runs says so",
+      "argv": [
+        "stat",
+        "nope"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devRunning"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "Task \"nope\" has no recorded runs."
+        ]
+      }
+    },
+    {
+      "name": "stat --json reports the active and latest runs in the subtree",
+      "argv": [
+        "stat",
+        "dev",
+        "--json"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devMixed"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdoutJson": {
+          "task": "dev",
+          "activeRun": {
+            "task": "dev:api",
+            "status": "Running"
+          },
+          "latestRun": {
+            "task": "dev:web",
+            "status": "Failed"
+          },
+          "subtree": {
+            "task": "dev",
+            "status": "Indeterminate",
+            "icon": "\u25d0",
+            "children": [
+              {
+                "task": "dev:api",
+                "status": "Running",
+                "icon": "\u25b6",
+                "children": []
+              },
+              {
+                "task": "dev:web",
+                "status": "Failed",
+                "icon": "\u2716",
+                "children": []
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "stat --json uses null for a task with no runs",
+      "argv": [
+        "stat",
+        "build",
+        "--json"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdoutJson": {
+          "task": "build",
+          "activeRun": null,
+          "latestRun": null,
+          "subtree": {
+            "task": "build",
+            "status": null,
+            "icon": "\u25cb",
+            "children": []
+          }
+        }
+      }
+    },
+    {
+      "name": "stat --json has a null subtree for an unknown task",
+      "argv": [
+        "stat",
+        "nope",
+        "--json"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdoutJson": {
+          "task": "nope",
+          "activeRun": null,
+          "latestRun": null,
+          "subtree": null
+        }
+      }
+    },
+    {
+      "name": "stat fails when the server cannot list tasks",
+      "argv": [
+        "stat",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "failListTasks": true
+      },
+      "expect": {
+        "exitCode": 1,
+        "stdoutEmpty": true
+      }
+    },
+    {
+      "name": "stat needs a task argument",
+      "argv": [
+        "stat"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 1
+      }
+    },
+    {
+      "name": "cancel stops every active run in the subtree",
+      "argv": [
+        "cancel",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devRunning"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "Cancelled 3/3 run(s) for \"dev\" and its subtasks."
+        ],
+        "requests": [
+          "POST /api/tasks/cancel run-dev",
+          "POST /api/tasks/cancel run-dev-api",
+          "POST /api/tasks/cancel run-dev-web"
+        ]
+      }
+    },
+    {
+      "name": "cancel skips runs that already finished",
+      "argv": [
+        "cancel",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devMixed"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "Cancelled 2/2 run(s) for \"dev\" and its subtasks."
+        ],
+        "notRequests": [
+          "POST /api/tasks/cancel run-dev-web"
+        ]
+      }
+    },
+    {
+      "name": "cancel targets a single subtask",
+      "argv": [
+        "cancel",
+        "dev:api"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devRunning"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "Cancelled 1/1 run(s) for \"dev:api\" and its subtasks."
+        ],
+        "notRequests": [
+          "POST /api/tasks/cancel run-dev"
+        ]
+      }
+    },
+    {
+      "name": "cancel ignores tasks that merely share a name prefix",
+      "argv": [
+        "cancel",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "prefixCollision"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "Cancelled 2/2 run(s)"
+        ],
+        "notRequests": [
+          "POST /api/tasks/cancel run-development"
+        ]
+      }
+    },
+    {
+      "name": "cancel reports when there is nothing to cancel",
+      "argv": [
+        "cancel",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devSucceeded"
+      },
+      "expect": {
+        "exitCode": 1,
+        "stderr": [
+          "No active runs found for task \"dev\" or its subtasks."
+        ]
+      }
+    },
+    {
+      "name": "cancel fails when the server rejects one of the runs",
+      "argv": [
+        "cancel",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devRunning",
+        "failCancelRunIds": [
+          "run-dev-web"
+        ]
+      },
+      "expect": {
+        "exitCode": 1,
+        "stdout": [
+          "Cancelled 2/3 run(s)"
+        ],
+        "stderr": [
+          "Failed to cancel 1 run(s): run-dev-web"
+        ]
+      }
+    },
+    {
+      "name": "cancel fails when the server cannot list runs",
+      "argv": [
+        "cancel",
+        "dev"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "devRunning",
+        "failListRuns": true
+      },
+      "expect": {
+        "exitCode": 1
+      }
+    },
+    {
+      "name": "run streams logs and exits 0 when the task succeeds",
+      "argv": [
+        "run",
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev:api",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "timeline": [
+          {
+            "afterMs": 40,
+            "log": {
+              "line": "compiling"
+            }
+          },
+          {
+            "afterMs": 80,
+            "log": {
+              "line": "done"
+            }
+          },
+          {
+            "afterMs": 120,
+            "status": "Success"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "compiling",
+          "done"
+        ],
+        "requests": [
+          "GET /api/tasks/runs",
+          "POST /api/tasks/run dev:api",
+          "WS /api/tasks/run-1/logs?includeChildren=true",
+          "WS /api/tasks/run-1",
+          "GET /api/tasks/run-1/logs?includeChildren=true"
+        ],
+        "notRequests": [
+          "GET /api/tasks/run-1/logs",
+          "WS /api/tasks/run-1/logs"
+        ]
+      }
+    },
+    {
+      "name": "run reads the existing runs before starting, so it can tell whether it owns the run",
+      "argv": [
+        "run",
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev:api",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "timeline": [
+          {
+            "afterMs": 40,
+            "status": "Success"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 0,
+        "requestOrder": [
+          "GET /api/tasks/runs",
+          "POST /api/tasks/run dev:api"
+        ]
+      }
+    },
+    {
+      "name": "run replays the snapshot of a task that is already producing output",
+      "argv": [
+        "run",
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev:api",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "logsBeforeSubscribe": [
+          {
+            "line": "already buffered",
+            "runId": "run-1"
+          }
+        ],
+        "timeline": [
+          {
+            "afterMs": 60,
+            "log": {
+              "line": "streamed after"
+            }
+          },
+          {
+            "afterMs": 120,
+            "status": "Success"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "already buffered",
+          "streamed after"
+        ],
+        "stdoutOccurrences": {
+          "already buffered": 1
+        }
+      }
+    },
+    {
+      "name": "run exits 1 when the task fails",
+      "argv": [
+        "run",
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev:api",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "timeline": [
+          {
+            "afterMs": 40,
+            "log": {
+              "line": "boom",
+              "isStderr": true
+            }
+          },
+          {
+            "afterMs": 80,
+            "status": "Failed"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 1,
+        "stderr": [
+          "boom"
+        ],
+        "stdoutEmpty": true
+      }
+    },
+    {
+      "name": "run exits 1 when the task is cancelled",
+      "argv": [
+        "run",
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev:api",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "timeline": [
+          {
+            "afterMs": 40,
+            "status": "Cancelled"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 1
+      }
+    },
+    {
+      "name": "run prints each log line exactly once despite snapshot overlap",
+      "argv": [
+        "run",
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev:api",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "timeline": [
+          {
+            "afterMs": 40,
+            "log": {
+              "line": "only-once"
+            }
+          },
+          {
+            "afterMs": 200,
+            "status": "Success"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdoutOccurrences": {
+          "only-once": 1
+        }
+      }
+    },
+    {
+      "name": "run waits for child runs before deciding the exit code",
+      "argv": [
+        "run",
+        "dev",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "timeline": [
+          {
+            "afterMs": 30,
+            "addChild": {
+              "id": "run-1-api",
+              "task": "dev:api",
+              "cwd": "/repo",
+              "parentRunId": "run-1",
+              "status": "Running",
+              "updatedAt": 2,
+              "children": []
+            }
+          },
+          {
+            "afterMs": 60,
+            "status": "Success"
+          },
+          {
+            "afterMs": 300,
+            "log": {
+              "line": "late child line",
+              "runId": "run-1-api"
+            }
+          },
+          {
+            "afterMs": 340,
+            "status": "Failed",
+            "statusRunId": "run-1-api"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "late child line"
+        ],
+        "requests": [
+          "WS /api/tasks/run-1/logs?includeChildren=true",
+          "GET /api/tasks/run-1/logs?includeChildren=true"
+        ],
+        "notRequests": [
+          "WS /api/tasks/run-1-api/logs?includeChildren=true"
+        ],
+        "stdoutOccurrences": {
+          "late child line": 1
+        }
+      }
+    },
+    {
+      "name": "run reports a task the server refuses to start",
+      "argv": [
+        "run",
+        "nope",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "failStart": true
+      },
+      "expect": {
+        "exitCode": 1,
+        "stderr": [
+          "failed to start task \"nope\""
+        ]
+      }
+    },
+    {
+      "name": "run fails when the server cannot list runs",
+      "argv": [
+        "run",
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "failListRuns": true
+      },
+      "expect": {
+        "exitCode": 1
+      }
+    },
+    {
+      "name": "a bare task name is an implicit run",
+      "argv": [
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev:api",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "timeline": [
+          {
+            "afterMs": 40,
+            "log": {
+              "line": "implicit"
+            }
+          },
+          {
+            "afterMs": 90,
+            "status": "Success"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "implicit"
+        ],
+        "requests": [
+          "POST /api/tasks/run dev:api"
+        ]
+      }
+    },
+    {
+      "name": "run surfaces an error frame from the log stream",
+      "argv": [
+        "run",
+        "dev:api",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "startedRun": {
+          "id": "run-1",
+          "task": "dev:api",
+          "cwd": "/repo",
+          "status": "Running",
+          "updatedAt": 1,
+          "children": []
+        },
+        "timeline": [
+          {
+            "afterMs": 40,
+            "logError": "log stream unavailable"
+          },
+          {
+            "afterMs": 90,
+            "status": "Success"
+          }
+        ]
+      },
+      "expect": {
+        "exitCode": 0,
+        "stderr": [
+          "log stream unavailable"
+        ]
+      }
+    },
+    {
+      "name": "--cwd is forwarded to the server",
+      "argv": [
+        "-C",
+        "/custom/dir",
+        "stat",
+        "dev",
+        "--json"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdoutJson": {
+          "task": "dev",
+          "cwd": "/custom/dir"
+        }
+      }
+    },
+    {
+      "name": "--cwd in its long form is forwarded too",
+      "argv": [
+        "--cwd",
+        "/custom/dir",
+        "stat",
+        "dev",
+        "--json"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdoutJson": {
+          "cwd": "/custom/dir"
+        }
+      }
+    },
+    {
+      "name": "an unknown option is rejected",
+      "argv": [
+        "--definitely-not-an-option"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 1
+      }
+    },
+    {
+      "name": "an unknown option after a subcommand is rejected",
+      "argv": [
+        "stat",
+        "dev",
+        "--definitely-not-an-option"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 1
+      }
+    },
+    {
+      "name": "--help exits 0 and describes the tool",
+      "argv": [
+        "--help"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 0,
+        "stdout": [
+          "--cwd"
+        ]
+      }
+    },
+    {
+      "name": "a missing subcommand argument exits 1",
+      "argv": [
+        "cancel"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none"
+      },
+      "expect": {
+        "exitCode": 1
+      }
+    },
+    {
+      "name": "an unknown subcommand is treated as a task to run, not an error",
+      "argv": [
+        "not-a-real-task",
+        "--non-interactive"
+      ],
+      "server": {
+        "tasks": "monorepo",
+        "runs": "none",
+        "failStart": true
+      },
+      "expect": {
+        "exitCode": 1,
+        "stderr": [
+          "failed to start task \"not-a-real-task\""
+        ]
+      }
+    }
+  ]
+}

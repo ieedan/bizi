@@ -1,0 +1,78 @@
+{
+  "$comment": "Shape of the task tree the TUI navigates. Row order is config order, depth-first.",
+  "flattenTaskRows": [
+    {
+      "name": "an empty task map has no rows",
+      "tasks": "empty",
+      "expected": []
+    },
+    {
+      "name": "flat tasks keep config order",
+      "tasks": "flat",
+      "expected": [
+        { "key": "build", "label": "build", "depth": 0 },
+        { "key": "test", "label": "test", "depth": 0 }
+      ]
+    },
+    {
+      "name": "children follow their parent depth-first",
+      "tasks": "monorepo",
+      "expected": [
+        { "key": "dev", "label": "dev", "depth": 0 },
+        { "key": "dev:api", "label": "api", "depth": 1 },
+        { "key": "dev:web", "label": "web", "depth": 1 },
+        { "key": "check", "label": "check", "depth": 0 },
+        { "key": "check:lint", "label": "lint", "depth": 1 },
+        { "key": "check:types", "label": "types", "depth": 1 },
+        { "key": "build", "label": "build", "depth": 0 }
+      ]
+    },
+    {
+      "name": "nesting deeper than one level keeps counting depth",
+      "tasks": "deep",
+      "expected": [
+        { "key": "a", "label": "a", "depth": 0 },
+        { "key": "a:b", "label": "b", "depth": 1 },
+        { "key": "a:b:c", "label": "c", "depth": 2 },
+        { "key": "z", "label": "z", "depth": 0 }
+      ]
+    },
+    {
+      "name": "a child declared but never flattened by the server is dropped",
+      "tasks": "ghostChild",
+      "expected": [{ "key": "dev", "label": "dev", "depth": 0 }]
+    }
+  ],
+  "getDirectChildTaskKeys": [
+    {
+      "tasks": "monorepo",
+      "taskKey": "dev",
+      "expected": ["dev:api", "dev:web"]
+    },
+    {
+      "tasks": "monorepo",
+      "taskKey": "check",
+      "expected": ["check:lint", "check:types"]
+    },
+    { "tasks": "monorepo", "taskKey": "build", "expected": [] },
+    { "tasks": "monorepo", "taskKey": "dev:api", "expected": [] },
+    { "tasks": "monorepo", "taskKey": "does-not-exist", "expected": [] },
+    { "tasks": "ghostChild", "taskKey": "dev", "expected": [] },
+    { "tasks": "deep", "taskKey": "a:b", "expected": ["a:b:c"] }
+  ],
+  "findNextParentTaskIndex": [
+    { "tasks": "monorepo", "from": 0, "expected": 3 },
+    { "tasks": "monorepo", "from": 1, "expected": 3 },
+    { "tasks": "monorepo", "from": 3, "expected": 6 },
+    { "tasks": "monorepo", "from": 6, "expected": 6 },
+    { "tasks": "flat", "from": 0, "expected": 1 },
+    { "tasks": "deep", "from": 0, "expected": 3 }
+  ],
+  "findPreviousParentTaskIndex": [
+    { "tasks": "monorepo", "from": 6, "expected": 3 },
+    { "tasks": "monorepo", "from": 4, "expected": 3 },
+    { "tasks": "monorepo", "from": 3, "expected": 0 },
+    { "tasks": "monorepo", "from": 0, "expected": 0 },
+    { "tasks": "deep", "from": 2, "expected": 0 }
+  ]
+}

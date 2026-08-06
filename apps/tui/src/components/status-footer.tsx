@@ -1,10 +1,9 @@
 import { For } from "solid-js";
+import { footerActions } from "../lib/view-state";
 
 interface StatusFooterProps {
 	errorMessage: string | null;
 	copyToastMessage: string | null;
-	canNavigateTasks: boolean;
-	canJumpParentTasks: boolean;
 	canRunOrRestart: boolean;
 	runAction: "run" | "restart";
 	canCancel: boolean;
@@ -14,20 +13,13 @@ interface StatusFooterProps {
 
 export function StatusFooter(props: StatusFooterProps) {
 	function actions() {
-		const parts: Array<{ key: string; label: string }> = [];
-		parts.push({ key: "/", label: "find/run" });
-		if (props.canRunOrRestart) {
-			parts.push({ key: "r", label: props.runAction });
-		}
-		if (props.canCancel) {
-			parts.push({ key: "c", label: "cancel" });
-		}
-		if (props.canToggleLogMode) {
-			parts.push({ key: "m", label: `logs: ${props.logMode}` });
-		}
-		parts.push({ key: "ctrl+c", label: "copy" });
-		parts.push({ key: "q", label: "quit" });
-		return parts;
+		return footerActions({
+			hasSelection: props.canRunOrRestart,
+			runAction: props.runAction,
+			canCancel: props.canCancel,
+			canToggleLogMode: props.canToggleLogMode,
+			logMode: props.logMode,
+		});
 	}
 
 	return (

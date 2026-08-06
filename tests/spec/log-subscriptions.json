@@ -1,0 +1,227 @@
+{
+  "$comment": [
+    "When the TUI opens and closes its websockets.",
+    "Each step mutates state and then runs the subscription sync; `effects` is everything the steps asked for, in order.",
+    "The selected run's stream is keyed on `id:updatedAt:status:includeChildren`, so any change the server reports re-opens it and takes a fresh snapshot rather than trusting the lines already buffered."
+  ],
+  "cases": [
+    {
+      "name": "with no runs nothing is subscribed",
+      "steps": [{ "sync": true }],
+      "expect": { "effects": [] }
+    },
+    {
+      "name": "loading runs opens the root streams and the selected run's streams",
+      "steps": [{ "runsLoaded": "devRunning" }],
+      "expect": {
+        "effects": [
+          { "type": "openRootRunStreams", "runIds": ["run-dev"] },
+          {
+            "type": "openSelectedRunStreams",
+            "runId": "run-dev",
+            "includeChildren": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "loading the same runs again changes nothing",
+      "steps": [
+        { "runsLoaded": "devRunning" },
+        { "clearEffects": true },
+        { "runsLoaded": "devRunning" }
+      ],
+      "expect": { "effects": [] }
+    },
+    {
+      "name": "a leaf task subscribes to its own logs only",
+      "steps": [
+        { "runsLoaded": "devRunning" },
+        { "clearEffects": true },
+        { "selectedIndex": 1 }
+      ],
+      "expect": {
+        "effects": [
+          { "type": "closeSelectedRunStreams" },
+          {
+            "type": "openSelectedRunStreams",
+            "runId": "run-dev-api",
+            "includeChildren": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "selecting a task with no run closes the stream and empties the buffer",
+      "steps": [
+        { "runsLoaded": "devRunning" },
+        { "clearEffects": true },
+        { "selectedIndex": 6 }
+      ],
+      "expect": {
+        "effects": [{ "type": "closeSelectedRunStreams" }],
+        "logCount": 0
+      }
+    },
+    {
+      "name": "toggling the log mode reopens the stream with the other aggregation",
+      "runs": "checkRunning",
+      "initial": { "selectedIndex": 3 },
+      "steps": [
+        { "sync": true },
+        { "clearEffects": true },
+        { "key": { "name": "m" } }
+      ],
+      "expect": {
+        "effects": [
+          { "type": "closeSelectedRunStreams" },
+          {
+            "type": "openSelectedRunStreams",
+            "runId": "run-check",
+            "includeChildren": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "a run update with a newer revision reopens the log stream",
+      "steps": [
+        { "runsLoaded": "devRunning" },
+        { "clearEffects": true },
+        {
+          "runUpdated": {
+            "id": "run-dev",
+            "task": "dev",
+            "cwd": "/repo",
+            "status": "Running",
+            "updatedAt": 1500,
+            "children": []
+          }
+        }
+      ],
+      "expect": {
+        "effects": [
+          { "type": "closeSelectedRunStreams" },
+          {
+            "type": "openSelectedRunStreams",
+            "runId": "run-dev",
+            "includeChildren": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "a status change reopens the log stream",
+      "steps": [
+        { "runsLoaded": "devRunning" },
+        { "clearEffects": true },
+        {
+          "runUpdated": {
+            "id": "run-dev",
+            "task": "dev",
+            "cwd": "/repo",
+            "status": "Success",
+            "updatedAt": 1000,
+            "children": []
+          }
+        }
+      ],
+      "expect": {
+        "effects": [
+          { "type": "closeSelectedRunStreams" },
+          {
+            "type": "openSelectedRunStreams",
+            "runId": "run-dev",
+            "includeChildren": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "a run update that reports the same revision is ignored",
+      "steps": [
+        { "runsLoaded": "devRunning" },
+        { "clearEffects": true },
+        {
+          "runUpdated": {
+            "id": "run-dev",
+            "task": "dev",
+            "cwd": "/repo",
+            "status": "Running",
+            "updatedAt": 1000,
+            "children": []
+          }
+        }
+      ],
+      "expect": { "effects": [] }
+    },
+    {
+      "name": "a new root run reopens the root streams without touching the log stream",
+      "steps": [
+        { "runsLoaded": "devRunning" },
+        { "clearEffects": true },
+        {
+          "runUpdated": {
+            "id": "run-build",
+            "task": "build",
+            "cwd": "/repo",
+            "status": "Running",
+            "updatedAt": 400,
+            "children": []
+          }
+        }
+      ],
+      "expect": {
+        "effects": [
+          { "type": "closeRootRunStreams" },
+          {
+            "type": "openRootRunStreams",
+            "runIds": ["run-build", "run-dev"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "losing every run closes both streams and empties the buffer",
+      "steps": [
+        { "runsLoaded": "devRunning" },
+        { "clearEffects": true },
+        { "runsLoaded": "none" }
+      ],
+      "expect": {
+        "effects": [
+          { "type": "closeRootRunStreams" },
+          { "type": "closeSelectedRunStreams" }
+        ],
+        "logCount": 0
+      }
+    },
+    {
+      "name": "restarting a task reopens the stream so the fresh snapshot lands",
+      "steps": [
+        { "runsLoaded": "devSucceeded" },
+        { "clearEffects": true },
+        {
+          "runUpdated": {
+            "id": "run-dev",
+            "task": "dev",
+            "cwd": "/repo",
+            "status": "Running",
+            "updatedAt": 3000,
+            "children": []
+          }
+        }
+      ],
+      "expect": {
+        "effects": [
+          { "type": "closeSelectedRunStreams" },
+          {
+            "type": "openSelectedRunStreams",
+            "runId": "run-dev",
+            "includeChildren": true
+          }
+        ]
+      }
+    }
+  ]
+}

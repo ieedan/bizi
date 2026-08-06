@@ -1,0 +1,91 @@
+{
+  "$comment": "Run lookups used by the `run`, `cancel` and `stat` commands. Ties are broken newest-first by updatedAt.",
+  "flattenTaskRuns": [
+    { "runs": "none", "expected": [] },
+    {
+      "runs": "devMixed",
+      "expected": ["run-dev", "run-dev-api", "run-dev-web"]
+    },
+    {
+      "runs": "duplicateTaskKeys",
+      "expected": ["run-old", "run-new"]
+    }
+  ],
+  "isTaskInSubtree": [
+    { "taskKey": "dev", "rootTaskKey": "dev", "expected": true },
+    { "taskKey": "dev:api", "rootTaskKey": "dev", "expected": true },
+    { "taskKey": "dev:api:watch", "rootTaskKey": "dev", "expected": true },
+    { "taskKey": "development", "rootTaskKey": "dev", "expected": false },
+    { "taskKey": "dev", "rootTaskKey": "dev:api", "expected": false },
+    { "taskKey": "", "rootTaskKey": "dev", "expected": false }
+  ],
+  "findLatestRunByTaskKey": [
+    { "runs": "devMixed", "taskKey": "dev:web", "expected": "run-dev-web" },
+    { "runs": "devMixed", "taskKey": "dev", "expected": "run-dev" },
+    { "runs": "duplicateTaskKeys", "taskKey": "build", "expected": "run-new" },
+    { "runs": "devMixed", "taskKey": "nope", "expected": null }
+  ],
+  "findActiveRunByTaskKey": [
+    { "runs": "devMixed", "taskKey": "dev:api", "expected": "run-dev-api" },
+    { "runs": "devMixed", "taskKey": "dev:web", "expected": null },
+    {
+      "runs": "duplicateTaskKeys",
+      "taskKey": "build",
+      "expected": "run-new"
+    },
+    { "runs": "devSucceeded", "taskKey": "dev", "expected": null }
+  ],
+  "findLatestRunInTaskSubtree": [
+    { "runs": "devMixed", "rootTaskKey": "dev", "expected": "run-dev-web" },
+    { "runs": "devMixed", "rootTaskKey": "dev:api", "expected": "run-dev-api" },
+    {
+      "runs": "prefixCollision",
+      "rootTaskKey": "dev",
+      "expected": "run-dev-api"
+    },
+    { "runs": "none", "rootTaskKey": "dev", "expected": null }
+  ],
+  "findActiveRunInTaskSubtree": [
+    { "runs": "devMixed", "rootTaskKey": "dev", "expected": "run-dev-api" },
+    { "runs": "devSucceeded", "rootTaskKey": "dev", "expected": null },
+    {
+      "runs": "prefixCollision",
+      "rootTaskKey": "development",
+      "expected": "run-development"
+    }
+  ],
+  "findActiveRunsInTaskSubtree": [
+    {
+      "name": "newest first, parents included",
+      "runs": "devMixed",
+      "rootTaskKey": "dev",
+      "expected": ["run-dev-api", "run-dev"]
+    },
+    {
+      "name": "a sibling task that merely shares a prefix is excluded",
+      "runs": "prefixCollision",
+      "rootTaskKey": "dev",
+      "expected": ["run-dev-api", "run-dev"]
+    },
+    {
+      "name": "nothing active",
+      "runs": "devSucceeded",
+      "rootTaskKey": "dev",
+      "expected": []
+    }
+  ],
+  "isTerminalRunStatus": [
+    { "status": "Queued", "expected": false },
+    { "status": "Running", "expected": false },
+    { "status": "Success", "expected": true },
+    { "status": "Failed", "expected": true },
+    { "status": "Cancelled", "expected": true }
+  ],
+  "taskRunStatusExitCode": [
+    { "status": "Success", "expected": 0 },
+    { "status": "Failed", "expected": 1 },
+    { "status": "Cancelled", "expected": 1 },
+    { "status": "Running", "expected": 1 },
+    { "status": "Queued", "expected": 1 }
+  ]
+}
