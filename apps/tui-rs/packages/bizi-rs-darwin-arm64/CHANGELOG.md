@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/ieedan/bizi/compare/tui-rs-darwin-arm64-v0.2.1...tui-rs-darwin-arm64-v0.3.0) (2026-08-06)
+
+
+### Miscellaneous Chores
+
+* **tui-rs-darwin-arm64:** Synchronize tui-rs versions
+
 ## [0.2.1](https://github.com/ieedan/bizi/compare/tui-rs-darwin-arm64-v0.2.0...tui-rs-darwin-arm64-v0.2.1) (2026-08-06)
 
 
