@@ -109,7 +109,6 @@ pub fn parse_ansi_log_segments(line: &str) -> Vec<ParsedLogSegment> {
     let mut current_style = LogTextStyle::default();
     let mut current_text = String::new();
     let mut index = 0usize;
-    let mut visible_column = 0usize;
 
     while index < sanitized.len() {
         let character = sanitized[index];
@@ -140,28 +139,13 @@ pub fn parse_ansi_log_segments(line: &str) -> Vec<ParsedLogSegment> {
             continue;
         }
 
-        // A tab is expanded here rather than passed through. Written into a cell
-        // it counts as one column to us but moves a real terminal to its next
-        // tab stop, which desynchronises the renderer from the screen and eats
-        // the characters that follow.
-        if character == '\t' {
-            let spaces = TAB_STOP - (visible_column % TAB_STOP);
-            for _ in 0..spaces {
-                current_text.push(' ');
-            }
-            visible_column += spaces;
-            index += 1;
-            continue;
-        }
-
         let code = character as u32;
-        if code < 0x20 || code == 0x7f {
+        if (code < 0x20 || code == 0x7f) && character != '\t' {
             index += 1;
             continue;
         }
 
         current_text.push(character);
-        visible_column += display_width(character);
         index += 1;
     }
 
@@ -189,12 +173,44 @@ fn flush_segment(
     });
 }
 
+/// Replaces tabs with the spaces that reach the next tab stop.
+///
+/// The parser keeps `\t` so it stays a faithful view of the line, matching the
+/// TypeScript client. Expansion belongs here instead: a tab written into a cell
+/// counts as one column to us but moves a real terminal to its next tab stop,
+/// which desynchronises the renderer from the screen and eats the characters
+/// that follow.
+fn expand_tabs(segments: Vec<ParsedLogSegment>) -> Vec<ParsedLogSegment> {
+    if !segments.iter().any(|segment| segment.text.contains('\t')) {
+        return segments;
+    }
+
+    let mut visible_column = 0usize;
+    segments
+        .into_iter()
+        .map(|segment| {
+            let mut text = String::with_capacity(segment.text.len());
+            for character in segment.text.chars() {
+                if character == '\t' {
+                    let spaces = TAB_STOP - (visible_column % TAB_STOP);
+                    text.extend(std::iter::repeat_n(' ', spaces));
+                    visible_column += spaces;
+                } else {
+                    text.push(character);
+                    visible_column += display_width(character);
+                }
+            }
+            ParsedLogSegment { text, ..segment }
+        })
+        .collect()
+}
+
 /// Splits a log line into the display rows the log pane renders, word wrapping
 /// at `width` columns the way the TypeScript TUI's `<text>` box does. Styling
 /// flows across the wrap points, so a colored span split over two rows keeps its
 /// color on both.
 pub fn wrap_log_line(line: &str, width: usize) -> Vec<Vec<ParsedLogSegment>> {
-    let segments = parse_ansi_log_segments(line);
+    let segments = expand_tabs(parse_ansi_log_segments(line));
     let (characters, style_ids) = flatten_segments(&segments);
 
     wrap_ranges(&characters, width)
@@ -206,7 +222,7 @@ pub fn wrap_log_line(line: &str, width: usize) -> Vec<Vec<ParsedLogSegment>> {
 /// Number of display rows `wrap_log_line` would produce. Used to lay the log
 /// viewport out without materializing rows for lines that are scrolled away.
 pub fn count_log_line_rows(line: &str, width: usize) -> usize {
-    let segments = parse_ansi_log_segments(line);
+    let segments = expand_tabs(parse_ansi_log_segments(line));
     let (characters, _) = flatten_segments(&segments);
     wrap_ranges(&characters, width).len()
 }
@@ -613,24 +629,46 @@ mod tests {
 
     #[test]
     fn expands_tabs_to_the_next_tab_stop() {
-        // A raw tab written into a cell counts as one column but moves the
-        // terminal to its next tab stop, which used to swallow the characters
-        // that followed it.
-        assert_eq!(sanitize_log_for_display("ab\tcd"), "ab      cd");
-        assert_eq!(sanitize_log_for_display("abcdefg\th"), "abcdefg h");
-        assert_eq!(sanitize_log_for_display("abcdefgh\ti"), "abcdefgh        i");
-        assert_eq!(sanitize_log_for_display("\tx"), "        x");
+        // The parser keeps `\t`, matching the TypeScript client; the render
+        // layer expands it, because a raw tab written into a cell counts as one
+        // column but moves the terminal to its next tab stop, which used to
+        // swallow the characters that followed it.
+        let rendered = |line: &str| -> String {
+            expand_tabs(parse_ansi_log_segments(line))
+                .into_iter()
+                .map(|segment| segment.text)
+                .collect()
+        };
+        assert_eq!(sanitize_log_for_display("ab\tcd"), "ab\tcd");
+        assert_eq!(rendered("ab\tcd"), "ab      cd");
+        assert_eq!(rendered("abcdefg\th"), "abcdefg h");
+        assert_eq!(rendered("abcdefgh\ti"), "abcdefgh        i");
+        assert_eq!(rendered("\tx"), "        x");
     }
 
     #[test]
-    fn never_emits_a_control_character() {
+    fn never_emits_a_control_character_other_than_a_tab() {
         let line = "a\tb\u{7}c\u{1}d";
         for segment in parse_ansi_log_segments(line) {
             assert!(
-                !segment.text.chars().any(char::is_control),
+                !segment
+                    .text
+                    .chars()
+                    .any(|character| character.is_control() && character != '\t'),
                 "control character survived: {:?}",
                 segment.text
             );
+        }
+
+        // Nothing reaches the screen with a tab still in it.
+        for row in wrap_log_line(line, 40) {
+            for segment in row {
+                assert!(
+                    !segment.text.chars().any(char::is_control),
+                    "control character survived: {:?}",
+                    segment.text
+                );
+            }
         }
     }
 
