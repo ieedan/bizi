@@ -48,6 +48,11 @@ use selection::Selection;
 const REFRESH_RUNS_MS: u64 = 1200;
 const CLOCK_TICK_MS: u64 = 250;
 const COPY_TOAST_MS: u64 = 2000;
+/// opentui's scrollbox scrolls a fifth of the viewport per arrow key and half
+/// of it per page key. The TypeScript TUI delegates its log scrolling to that
+/// scrollbox, so these are the amounts to match.
+const LOG_SCROLL_LINE_DIVISOR: usize = 5;
+const LOG_SCROLL_PAGE_DIVISOR: usize = 2;
 
 type Backend = CrosstermBackend<Stdout>;
 
@@ -184,10 +189,9 @@ pub struct App {
     // Websocket bookkeeping.
     root_runs_key: String,
     root_run_handles: Vec<JoinHandle<()>>,
-    log_subscription_key: Option<(String, bool)>,
+    log_subscription_key: Option<String>,
     log_generation: u64,
     log_handles: Vec<JoinHandle<()>>,
-    last_selected_run_status: Option<TaskRunStatus>,
 
     should_quit: bool,
 }
@@ -233,7 +237,6 @@ impl App {
             log_subscription_key: None,
             log_generation: 0,
             log_handles: Vec::new(),
-            last_selected_run_status: None,
             should_quit: false,
         }
     }
@@ -545,43 +548,42 @@ impl App {
         }
     }
 
-    /// Resubscribes the log stream when the selected run changes, when the log
-    /// mode flips, or when the run starts a fresh execution (restart), which is
-    /// when the server has a new snapshot for us.
+    /// Identity of the selected run's log stream. The run's `updated_at` and
+    /// `status` are part of it, so a run that reports any change re-opens the
+    /// stream and takes a fresh snapshot from the server rather than trusting
+    /// the lines it has already accumulated. The TypeScript TUI's effect tracks
+    /// the same revision, and the two need to agree about when a reconnect
+    /// happens.
+    fn selected_stream_key(&self) -> Option<String> {
+        let run = self.selected_run()?;
+        Some(format!(
+            "{}:{}:{}:{}",
+            run.id,
+            run.updated_at,
+            run.status.as_str(),
+            self.selected_uses_aggregate_logs()
+        ))
+    }
+
     fn sync_log_subscription(&mut self) {
-        let selected_run = self.selected_run().map(|run| (run.id.clone(), run.status));
-        let Some((run_id, status)) = selected_run else {
-            if self.log_subscription_key.is_some() {
-                self.log_subscription_key = None;
-                self.last_selected_run_status = None;
-                for handle in self.log_handles.drain(..) {
-                    handle.abort();
-                }
-                self.replace_logs(Vec::new());
-            }
-            return;
-        };
-
-        let include_children = self.selected_uses_aggregate_logs();
-        let key = (run_id.clone(), include_children);
-        let restarted = self
-            .last_selected_run_status
-            .map(|previous| previous.is_terminal() && status.is_active())
-            .unwrap_or(false);
-
-        if Some(&key) == self.log_subscription_key.as_ref() && !restarted {
-            self.last_selected_run_status = Some(status);
+        let next_key = self.selected_stream_key();
+        if next_key == self.log_subscription_key {
             return;
         }
-
-        self.log_subscription_key = Some(key);
-        self.last_selected_run_status = Some(status);
-        self.log_generation += 1;
-        let generation = self.log_generation;
+        self.log_subscription_key = next_key;
 
         for handle in self.log_handles.drain(..) {
             handle.abort();
         }
+
+        let Some(run) = self.selected_run() else {
+            self.replace_logs(Vec::new());
+            return;
+        };
+        let run_id = run.id.clone();
+        let include_children = self.selected_uses_aggregate_logs();
+        self.log_generation += 1;
+        let generation = self.log_generation;
 
         // Matches the TypeScript TUI: the previous run's lines stay on screen
         // until the new subscription's snapshot replaces them, and the view
@@ -946,22 +948,23 @@ impl App {
     }
 
     fn handle_log_scroll_keys(&mut self, key: KeyEvent) -> bool {
-        let viewport = self.log_viewport_height.max(1);
+        let line_step = self.log_scroll_step(LOG_SCROLL_LINE_DIVISOR);
+        let page_step = self.log_scroll_step(LOG_SCROLL_PAGE_DIVISOR);
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
-                self.scroll_logs_by(-1);
+                self.scroll_logs_by(-line_step);
                 true
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                self.scroll_logs_by(1);
+                self.scroll_logs_by(line_step);
                 true
             }
             KeyCode::PageUp => {
-                self.scroll_logs_by(-(viewport as isize));
+                self.scroll_logs_by(-page_step);
                 true
             }
             KeyCode::PageDown => {
-                self.scroll_logs_by(viewport as isize);
+                self.scroll_logs_by(page_step);
                 true
             }
             KeyCode::Home => {
@@ -975,6 +978,13 @@ impl App {
             }
             _ => false,
         }
+    }
+
+    /// opentui's scrollbox moves by a fraction of the viewport, so the
+    /// TypeScript TUI scrolls further per keypress on a taller pane. This
+    /// reproduces that rather than moving a fixed number of rows.
+    fn log_scroll_step(&self, divisor: usize) -> isize {
+        (self.log_viewport_height.max(1) / divisor).max(1) as isize
     }
 
     fn scroll_logs_by(&mut self, delta: isize) {

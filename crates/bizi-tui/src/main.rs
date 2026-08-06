@@ -21,7 +21,10 @@ fn main() {
         Ok(mode) => mode,
         Err(error) => {
             let _ = error.print();
-            std::process::exit(error.exit_code());
+            // clap exits 2 on a usage error where the TypeScript client exits
+            // 1. `--help` and `--version` still exit 0.
+            let exit_code = if error.exit_code() == 0 { 0 } else { 1 };
+            std::process::exit(exit_code);
         }
     };
 
